@@ -33,7 +33,7 @@ def _parse_args():
         help="learning rate for optimizer (default: 1e-3)",
     )
     parser.add_argument(
-        "--epochs", type=int, default=20, help="number of epochs (default: 10)"
+        "--epochs", type=int, default=30, help="number of epochs (default: 10)"
     )
     parser.add_argument(
         "--seed", type=int, default=42, help="initial seed value (default:42)"

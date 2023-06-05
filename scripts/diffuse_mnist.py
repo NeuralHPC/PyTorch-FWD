@@ -22,7 +22,7 @@ class UNet(nn.Module):
     @nn.compact
     def __call__(self, x: jnp.ndarray):
         x1 = jnp.expand_dims(x, -1)
-        init_feat = 4
+        init_feat = 16
         # out_neurons = 2
 
         def down_block(x_in, feats):
@@ -83,7 +83,7 @@ def train_step(batch: jnp.ndarray,
     key = jax.random.split(key, 1)[0]
     noise_array = jax.random.uniform(
         key, [time_steps] + list(batch.shape),
-        minval=-1, maxval=1)
+        minval=-.8, maxval=.8)
     cum_noise_array = jnp.cumsum(noise_array, axis=0)
 
     x_array = jnp.expand_dims(batch, 0) + cum_noise_array
@@ -112,9 +112,9 @@ def test(net_state: FrozenDict, model: nn.Module, key: int,
     key = jax.random.PRNGKey(time_steps)
     process_array = jax.random.uniform(
         key, [1] + input_shape,
-        minval=-1, maxval=1)
+        minval=-.8, maxval=.8)
     for _ in range(time_steps):
-        process_array = model.apply(net_state, process_array)
+        process_array = model.apply(net_state, process_array)[:, :, :, 0]
     return process_array
 
 
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     net_state = model.init(key, jnp.ones([args.batch_size] + input_shape))
     opt_state = opt.init(net_state)
 
-    for e in range(30):
+    for e in range(args.epochs):
         for pos, img in enumerate(train_batches):
             img = jnp.array(img)
             img_norm = (img - stats["mean"]) / stats["std"]
@@ -149,8 +149,8 @@ if __name__ == '__main__':
                 opt_state, opt,
                 key, args.time_steps)
             print(e, pos, mean_loss, len(train_batches))
-    breakpoint()
 
+    breakpoint()
     # testing...
     test_image = test(net_state, model, 4, input_shape, 30)
     breakpoint()
