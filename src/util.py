@@ -23,7 +23,7 @@ def _parse_args():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=64,
+        default=60,
         help="input batch size for testing (default: 512)",
     )
     parser.add_argument(
@@ -39,6 +39,6 @@ def _parse_args():
         "--seed", type=int, default=42, help="initial seed value (default:42)"
     )
     parser.add_argument(
-        "--time-steps", type=int, default=100, help="steps per diffusion"
+        "--time-steps", type=int, default=30, help="steps per diffusion"
     )
     return parser.parse_args()
