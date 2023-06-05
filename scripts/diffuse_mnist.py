@@ -109,7 +109,7 @@ def train_step(batch: jnp.ndarray,
 
 def test(net_state: FrozenDict, model: nn.Module, key: int,
          input_shape: List[int], time_steps: int):
-    key = jax.random.PRNGKey(time_steps)
+    key = jax.random.PRNGKey(key)
     process_array = jax.random.uniform(
         key, [1] + input_shape,
         minval=-.8, maxval=.8)
