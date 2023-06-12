@@ -87,7 +87,7 @@ def diff_step(net_state, noisy_batch, batch, time, model):
 loss_grad_fn = jax.value_and_grad(diff_step, argnums=0)
 
 
-@partial(jax.jit, static_argnames=['model', 'opt', 'time_steps'])
+# @partial(jax.jit, static_argnames=['model', 'opt', 'time_steps'])
 def train_step(batch: jnp.ndarray,
                net_state: FrozenDict, opt_state: FrozenDict,
                seed: int, model: nn.Module,
@@ -97,8 +97,10 @@ def train_step(batch: jnp.ndarray,
     key = jax.random.PRNGKey(seed[0])
     noise_array = jax.random.uniform(
         key, [time_steps] + list(batch.shape),
-        minval=-1., maxval=1.)
+        minval=-.8, maxval=.8)
     cum_noise_array = jnp.cumsum(noise_array, axis=0)
+    # std = jnp.std(cum_noise_array, axis=[2,3])
+    # std = jnp.expand_dims(std, [2,3])
 
     x_array = jnp.expand_dims(batch, 0) + cum_noise_array
     y_array = jnp.expand_dims(batch, 0) + jnp.concatenate(
@@ -135,7 +137,7 @@ def test(net_state: FrozenDict, model: nn.Module, key: int,
     prng_key = jax.random.PRNGKey(key)
     process_array = jax.random.uniform(
         prng_key, [1] + input_shape,
-        minval=-1., maxval=1.)
+        minval=-.8, maxval=.8)
     for time in range(time_steps):
         process_array = model.apply(net_state, 
             (process_array, jnp.expand_dims(jnp.array(time), -1)))[:, :, :, 0]
@@ -173,7 +175,7 @@ if __name__ == '__main__':
     opt_state = opt.init(net_state)
     iterations = 0
 
-    @partial(jax.jit, static_argnames= ['model', 'opt', 'time_steps'])
+    # @partial(jax.jit, static_argnames= ['model', 'opt', 'time_steps'])
     def central_step(img: jnp.ndarray,
                      net_state: FrozenDict,
                      opt_state: FrozenDict,
@@ -186,15 +188,20 @@ if __name__ == '__main__':
         if img.shape[0] % gpus != 0:
             img = img[:(img.shape[0]//gpus)*gpus]
             print(f"lost, images. New shape: {img.shape}")
-        img_norm = jnp.stack(jnp.split(img, gpus))
+        img_norm = jnp.stack(jnp.split(img_norm, gpus))
         print(f"input shape: {img_norm.shape}")
 
         partial_train_step = partial(train_step,
         net_state=net_state, opt_state=opt_state,                          
         model=model, opt=opt, time_steps=time_steps)
         pmap_train_step = jax.pmap(
-            partial_train_step, devices=jax.devices()[:gpus]
+             partial_train_step, devices=jax.devices()[:gpus]
         )
+        # debug without jit
+        # res = list(map(partial(
+        #     partial_train_step,
+        #     seed=jnp.array(args.seed)+jnp.arange(gpus)),
+        #     img_norm))
         mses, net_states, opt_states = pmap_train_step(
             batch=img_norm,
             seed=jnp.expand_dims(jnp.array(args.seed)+jnp.arange(gpus), -1)
@@ -222,10 +229,10 @@ if __name__ == '__main__':
     test_image = test(net_state, model, 5, input_shape, 20)
     plt.imshow(test_image[0])
     now = datetime.datetime.now()
-    plt.savefig('test_img1_{now}.png')
+    plt.savefig(f'test_img1_{now}.png')
     plt.show()
     test_image = test(net_state, model, 6, input_shape, 20)
     plt.imshow(test_image[0])
-    plt.savefig('test_img2_{now}.png')
+    plt.savefig(f'test_img2_{now}.png')
     plt.show()
     breakpoint()
