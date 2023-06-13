@@ -28,7 +28,7 @@ def _parse_args():
         "--batch-size",
         type=int,
         default=50,
-        help="input batch size for testing (default: 512)",
+        help="input batch size for testing (default: 50)",
     )
     parser.add_argument(
         "--learning-rate",
@@ -37,7 +37,7 @@ def _parse_args():
         help="learning rate for optimizer (default: 1e-3)",
     )
     parser.add_argument(
-        "--epochs", type=int, default=100, help="number of epochs (default: 10)"
+        "--epochs", type=int, default=10, help="number of epochs (default: 10)"
     )
     parser.add_argument(
         "--seed", type=int, default=42, help="initial seed value (default:42)"
@@ -48,6 +48,10 @@ def _parse_args():
     parser.add_argument(
         "--gpus", type=int, default=-1, help="set gpu no by hand. Use all if -1 (default)."
     )
+    parser.add_argument(
+        "--logdir", type=str, default="./log", help="logdir name."
+    )
+    
     return parser.parse_args()
 
 def get_mnist_test_data() -> Tuple[np.ndarray, np.ndarray]:

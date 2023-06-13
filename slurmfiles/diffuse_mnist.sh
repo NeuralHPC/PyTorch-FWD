@@ -17,11 +17,11 @@ export LD_LIBRARY_PATH=/p/home/jusers/wolter1/juwels/project_drive/cudnn-linux-x
 
 source /p/home/jusers/wolter1/juwels/project_drive/jax_env/bin/activate
 
-PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 50 --seed 42
+PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 100 --seed 42
 
-PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 50 --seed 43
+# PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 50 --seed 43
 
-PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 50 --seed 44
+# PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 50 --seed 44
 
-PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 50 --seed 45
+# PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 50 --seed 45
 
