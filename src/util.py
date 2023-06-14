@@ -7,20 +7,6 @@ import numpy as np
 import jax.numpy as jnp
 
 
-@jax.jit
-def pad_odd(input_x: jnp.ndarray) -> jnp.ndarray:
-    # dont pad the batch axis.
-    pad_list = [(0, 0, 0)]
-    for axis_shape in input_x.shape[1:-1]:
-        if axis_shape % 2 != 0:
-            pad_list.append((0, 1, 0))
-        else:
-            pad_list.append((0, 0, 0))
-    # dont pad the features
-    pad_list.append((0, 0, 0))
-    return jax.lax.pad(input_x, 0., pad_list)
-
-
 def _parse_args():
     """Parse cmd line args for training an image classifier."""
     parser = argparse.ArgumentParser(description="Run a diffusion model")

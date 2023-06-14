@@ -1,5 +1,5 @@
 import datetime
-from typing import List, Tuple
+from typing import List
 from functools import partial
 
 from clu import metric_writers
@@ -15,74 +15,9 @@ from flax.core.frozen_dict import FrozenDict
 import numpy as np
 import matplotlib.pyplot as plt
 
+from src.util import _parse_args, get_mnist_train_data
+from src.networks import UNet
 
-from datasets import load_dataset
-from src.util import _parse_args, pad_odd, get_mnist_train_data
-
-
-class UNet(nn.Module):
-    transpose_conv = False
-    base_feat_no = 32 # 128
-
-    @nn.compact
-    def __call__(self, x_in: Tuple[jnp.ndarray]):
-        x, time = x_in
-        x_in = jnp.expand_dims(x, -1)
-        init_feat = self.base_feat_no
-
-
-        x1 = nn.relu(nn.Conv(
-                     features=init_feat, kernel_size=(3, 3), padding="SAME")(x_in))
-
-        def down_block(x_bin, feats, time):
-            y = nn.relu(nn.Conv(
-                features=feats, kernel_size=(3, 3), padding="SAME")(x_bin))
-            time_emb = nn.Dense(np.prod(y.shape[1:]))(time)
-            time_emb = jnp.reshape(time_emb, [1] + list(y.shape[1:]))
-            y = y + time_emb
-            y = nn.relu(nn.Conv(features=feats,
-                                kernel_size=(3, 3), strides=(2, 2),
-                                padding="SAME")(y))
-            y = nn.GroupNorm()(y)
-            return pad_odd(y) 
-
-        x2 = down_block(x1, init_feat, time)
-        x3 = down_block(x2, init_feat * 2, time)
-        x4 = down_block(x3, init_feat * 4, time)
-        x5 = down_block(x4, init_feat * 8, time)
-
-        x6 = x5 + nn.relu(nn.Conv(
-            features=init_feat * 8, kernel_size=(3, 3), padding="SAME")(x5))
-
-        def up_block(x_bin, x_cat, feats, time):
-            B, H, W, C = x_bin.shape
-            if self.transpose_conv:
-                y = nn.ConvTranspose(
-                    features=feats, kernel_size=(3, 3), strides=(2, 2))(x_bin)
-            else:
-                y = jax.image.resize(x_bin, (B, H * 2, W * 2, C), 'nearest')
-            y = y[:, :x_cat.shape[1], :x_cat.shape[2], :]
-            #y_cat = jnp.concatenate([x_cat, y], axis=-1)
-            time_emb = nn.Dense(np.prod(y.shape[1:]))(time)
-            time_emb = jnp.reshape(time_emb, [1] + list(y.shape[1:]))
-            y = y + time_emb
-            y = nn.relu(nn.Conv(
-                features=feats, kernel_size=(3, 3), padding="SAME")(y))
-            y = nn.relu(nn.Conv(
-                features=feats, kernel_size=(3, 3), padding="SAME")(y))
-            y = nn.GroupNorm()(y)
-            return y
-
-        x7 = up_block(x6, x4, init_feat * 4, time) # 4
-        x7 = x7 + x4
-        x8 = up_block(x7, x3, init_feat * 2, time) # 2
-        x8 = x8 + x3
-        x9 = up_block(x8, x2, init_feat, time)
-        x9 = x9 + x2
-        x10 = up_block(x9, x1, init_feat, time)  # TODO: Too small??
-        y = nn.Conv(
-            features=1, kernel_size=(1, 1), padding="SAME")(x10)
-        return x_in + y
 
 
 @partial(jax.jit, static_argnames=['model'])
@@ -123,7 +58,7 @@ def train_step(batch: jnp.ndarray,
 
     time_rec_map = jax.vmap(
         partial(reconstruct, net_state=net_state, model=model))
-    mses, grads = time_rec_map(map_tree)
+    mses, grads = time_rec_map(map_tree=map_tree)
 
     def update(net_state, opt_state, grads):
         time_update_map = jax.vmap(
@@ -141,12 +76,16 @@ def train_step(batch: jnp.ndarray,
     net_state, opt_state = update(net_state, opt_state, grads)
 
     # recurrent diffusion update
-    # time_apply = jax.vmap(partial(model.apply, variables=net_state))
-    # rec_x = time_apply(x_in=(x_array, time))
-    # map_tree = (rec_x[:], y_array, time)
-    # TODO: Finish
+    time_apply = jax.vmap(partial(model.apply, variables=net_state))
+    rec_x = time_apply(x_in=(x_array, time))
+    map_tree = (rec_x[1:, ..., 0], y_array[:-1], time[:-1])
+    time_rec_map = jax.vmap(
+        partial(reconstruct, net_state=net_state, model=model))
+    mses2, grads = time_rec_map(map_tree=map_tree)
 
-    mse = jnp.mean(mses)
+    net_state, opt_state = update(net_state, opt_state, grads)
+
+    mse = jnp.mean(jnp.concatenate([mses, mses2]))
     return mse, net_state, opt_state
 
 
@@ -160,32 +99,32 @@ def test(net_state: FrozenDict, model: nn.Module, key: int,
         process_array = jnp.clip(process_array, -1., 1.)
         process_array = model.apply(net_state, 
             (process_array, jnp.expand_dims(jnp.array(time), -1)))[:, :, :, 0]
-        
     return process_array[0]
 
 
-def testing(e, net_state, model, input_shape):
+def testing(e, net_state, model, input_shape, writer, time_steps=30):
     seed = 5
-    test_image = test(net_state, model, seed, input_shape, 30)
+    test_image = test(net_state, model, seed, input_shape, time_steps)
     plt.imshow(test_image)
     now = datetime.datetime.now()
-    plt.savefig(f'out_img/{e}_{now}_test_{seed}.png')
+    plt.savefig(f'out_img/{now}_{e}_test_{seed}.png')
     plt.clf()
-    # writer.write_images(e, {
-    #     'seed': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
+    writer.write_images(e, {
+        f'test_seed_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
     seed = 6
-    test_image = test(net_state, model, seed, input_shape, 30)
+    test_image = test(net_state, model, seed, input_shape, time_steps)
     plt.imshow(test_image)
-    plt.savefig(f'out_img/{e}_{now}_test_{seed}.png')
+    plt.savefig(f'out_img/{now}_{e}_test_{seed}.png')
     plt.clf()
-    # writer.write_images(e, {
-    #     'seed': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
+    writer.write_images(e, {
+        f'test_seed_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
 
 
 if __name__ == '__main__':
     args = _parse_args()
     print(args)
-    writer = metric_writers.create_default_writer(args.logdir)
+    now = datetime.datetime.now()
+    writer = metric_writers.create_default_writer(args.logdir + f"/{now}")
 
     np.random.seed(args.seed)
     key = jax.random.PRNGKey(args.seed)
@@ -270,4 +209,5 @@ if __name__ == '__main__':
             print('testing...')
             testing(e, net_state, model, input_shape, writer)
 
+    print('testing...')
     testing(e, net_state, model, input_shape, writer)
