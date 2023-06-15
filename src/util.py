@@ -37,6 +37,10 @@ def _parse_args():
     parser.add_argument(
         "--logdir", type=str, default="./log", help="logdir name."
     )
+    parser.add_argument(
+        "--distribute", help="Use for multinode training.", action='store_true'
+    )
+    
     
     return parser.parse_args()
 

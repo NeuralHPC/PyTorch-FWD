@@ -1,5 +1,6 @@
 import datetime
-from typing import List
+import pickle
+from typing import List, Dict
 from functools import partial
 
 from clu import metric_writers
@@ -29,7 +30,6 @@ def diff_step(net_state, x, y, time, model):
 diff_step_grad = jax.value_and_grad(diff_step, argnums=0)
 
 
-# @partial(jax.jit, static_argnames=['model', 'opt', 'time_steps'])
 def train_step(batch: jnp.ndarray,
                net_state: FrozenDict, opt_state: FrozenDict,
                seed: int, model: nn.Module,
@@ -77,10 +77,21 @@ def train_step(batch: jnp.ndarray,
 
     # recurrent diffusion update
     time_apply = jax.vmap(partial(model.apply, variables=net_state))
-    rec_x = time_apply(x_in=(x_array, time))
-    map_tree = (rec_x[1:, ..., 0], y_array[:-1], time[:-1])
+
+    key = jax.random.split(key, 1)[0]
+    rec_steps = 2
+    rec_x = x_array
+    for l in range(rec_steps):
+        rec_x = time_apply(x_in=(rec_x, time))[..., 0]
+        rec_x = rec_x[1:]
+        time = time[:-1]
+    
+    map_tree = (rec_x,
+                y_array[:-rec_steps],
+                time)
+    
     time_rec_map = jax.vmap(
-        partial(reconstruct, net_state=net_state, model=model))
+            partial(reconstruct, net_state=net_state, model=model))
     mses2, grads = time_rec_map(map_tree=map_tree)
 
     net_state, opt_state = update(net_state, opt_state, grads)
@@ -154,21 +165,29 @@ if __name__ == '__main__':
     opt_state = opt.init(net_state)
     iterations = 0
 
-    @partial(jax.jit, static_argnames= ['model', 'opt', 'time_steps'])
+    # @partial(jax.jit, static_argnames= ['model', 'opt', 'time_steps'])
     def central_step(img: jnp.ndarray,
                      net_state: FrozenDict,
                      opt_state: FrozenDict,
                      model: nn.Module,
                      opt: optax.GradientTransformation,
                      time_steps: int):
+
+        @partial(jax.jit, static_argnames='gpus')
+        def normalize(img: jnp.ndarray,
+                      stats: Dict[str, jnp.ndarray],
+                      gpus: int):
+            img_norm = (img - stats["mean"]) / stats["std"]
+            print(f"Split {img.shape}, into {gpus}")
+            if img.shape[0] % gpus != 0:
+                img = img[:(img.shape[0]//gpus)*gpus]
+                print(f"lost, images. New shape: {img.shape}")
+            img_norm = jnp.stack(jnp.split(img_norm, gpus))
+            print(f"input shape: {img_norm.shape}")
+            return img_norm
+        
         img = jnp.array(img)
-        img_norm = (img - stats["mean"]) / stats["std"]
-        print(f"Split {img.shape}, into {gpus}")
-        if img.shape[0] % gpus != 0:
-            img = img[:(img.shape[0]//gpus)*gpus]
-            print(f"lost, images. New shape: {img.shape}")
-        img_norm = jnp.stack(jnp.split(img_norm, gpus))
-        print(f"input shape: {img_norm.shape}")
+        img_norm = normalize(img, stats, gpus)
 
         partial_train_step = partial(train_step,
         net_state=net_state, opt_state=opt_state,                          
@@ -186,13 +205,23 @@ if __name__ == '__main__':
             seed=jnp.expand_dims(jnp.array(args.seed)+jnp.arange(gpus), -1)
             )
         mean_loss = jnp.mean(mses)
-        net_state = jax.tree_map(partial(jnp.mean, axis=0),
-                                net_states)
-        mean_opt_state = jax.tree_map(partial(jnp.mean, axis=0),
-                                    opt_states)
-        opt_state = jax.tree_map(lambda t, r: t.astype(r.dtype),
-                                 mean_opt_state,  opt_states)
+
+        @jax.jit
+        def average_gpus(net_states: FrozenDict, 
+                         opt_states: FrozenDict):
+            net_state = jax.tree_map(partial(jnp.mean, axis=0),
+                                    net_states)
+            mean_opt_state = jax.tree_map(partial(jnp.mean, axis=0),
+                                        opt_states)
+            opt_state = jax.tree_map(lambda t, r: t.astype(r.dtype),
+                                     mean_opt_state,  opt_states)
+            return net_state, opt_state
+
+        net_state, opt_state = average_gpus(net_states, opt_states)
+        
         return mean_loss, net_state, opt_state
+    
+        
             
     for e in range(args.epochs):
         for pos, img in enumerate(train_batches):
@@ -208,6 +237,10 @@ if __name__ == '__main__':
         if e % 5 == 0:
             print('testing...')
             testing(e, net_state, model, input_shape, writer)
+            train_state = (net_state, opt_state)
+            with open(f'log/checkpoints/{now}', 'wb') as f:
+                pickle.dump(train_state, f)
+
 
     print('testing...')
     testing(e, net_state, model, input_shape, writer)
