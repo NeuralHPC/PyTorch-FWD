@@ -23,7 +23,7 @@ def pad_odd(input_x: jnp.ndarray) -> jnp.ndarray:
 
 class UNet(nn.Module):
     transpose_conv = False
-    base_feat_no = 128 # 128
+    base_feat_no = 128
 
     @nn.compact
     def __call__(self, x_in: Tuple[jnp.ndarray]):

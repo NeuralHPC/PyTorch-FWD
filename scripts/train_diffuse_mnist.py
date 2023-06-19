@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 
 from src.util import _parse_args, get_mnist_train_data
 from src.networks import UNet
+from src.sample import sample_net
 
 
 
@@ -79,16 +80,15 @@ def train_step(batch: jnp.ndarray,
     time_apply = jax.vmap(partial(model.apply, variables=net_state))
 
     key = jax.random.split(key, 1)[0]
-    rec_steps = 2
+    # rec_steps = 1
     rec_x = x_array
-    for l in range(rec_steps):
-        rec_x = time_apply(x_in=(rec_x, time))[..., 0]
-        rec_x = rec_x[1:]
-        time = time[:-1]
+    # for _ in range(rec_steps):
+    rec_x = time_apply(x_in=(rec_x, time))[..., 0]
     
-    map_tree = (rec_x,
-                y_array[:-rec_steps],
-                time)
+    map_tree = (rec_x[1:],
+                #y_array[:-rec_steps],
+                y_array[:-1],
+                time[:-1])
     
     time_rec_map = jax.vmap(
             partial(reconstruct, net_state=net_state, model=model))
@@ -100,22 +100,10 @@ def train_step(batch: jnp.ndarray,
     return mse, net_state, opt_state
 
 
-def test(net_state: FrozenDict, model: nn.Module, key: int,
-         input_shape: List[int], time_steps: int):
-    prng_key = jax.random.PRNGKey(key)
-    process_array = jax.random.uniform(
-        prng_key, [1] + input_shape,
-        minval=-.8, maxval=.8)
-    for time in range(time_steps):
-        process_array = jnp.clip(process_array, -1., 1.)
-        process_array = model.apply(net_state, 
-            (process_array, jnp.expand_dims(jnp.array(time), -1)))[:, :, :, 0]
-    return process_array[0]
-
 
 def testing(e, net_state, model, input_shape, writer, time_steps=30):
     seed = 5
-    test_image = test(net_state, model, seed, input_shape, time_steps)
+    test_image = sample_net(net_state, model, seed, input_shape, time_steps)
     plt.imshow(test_image)
     now = datetime.datetime.now()
     plt.savefig(f'out_img/{now}_{e}_test_{seed}.png')
@@ -123,7 +111,7 @@ def testing(e, net_state, model, input_shape, writer, time_steps=30):
     writer.write_images(e, {
         f'test_seed_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
     seed = 6
-    test_image = test(net_state, model, seed, input_shape, time_steps)
+    test_image = sample_net(net_state, model, seed, input_shape, time_steps)
     plt.imshow(test_image)
     plt.savefig(f'out_img/{now}_{e}_test_{seed}.png')
     plt.clf()
@@ -221,8 +209,6 @@ if __name__ == '__main__':
         
         return mean_loss, net_state, opt_state
     
-        
-            
     for e in range(args.epochs):
         for pos, img in enumerate(train_batches):
             mean_loss, net_state, opt_state = central_step(
@@ -237,9 +223,9 @@ if __name__ == '__main__':
         if e % 5 == 0:
             print('testing...')
             testing(e, net_state, model, input_shape, writer)
-            train_state = (net_state, opt_state)
-            with open(f'log/checkpoints/{now}', 'wb') as f:
-                pickle.dump(train_state, f)
+            to_storage = (net_state, opt_state, model)
+            with open(f'log/checkpoints/e_{e}_time_{now}.pkl', 'wb') as f:
+                pickle.dump(to_storage, f)
 
 
     print('testing...')

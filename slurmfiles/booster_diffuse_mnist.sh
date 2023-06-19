@@ -6,7 +6,8 @@
 #SBATCH --job-name=diff_train
 #SBATCH --output=out/diff_train-%j.out
 #SBATCH --error=out/diff_train-%j.err
-#SBATCH --time=10:00:00
+#SBATCH --time=02:00:00
+#SBATCH --partition develbooster
 
 module load Python
 module load CUDA
@@ -17,7 +18,7 @@ export LD_LIBRARY_PATH=/p/home/jusers/wolter1/juwels/project_drive/cudnn-linux-x
 
 source /p/home/jusers/wolter1/juwels/project_drive/jax_env/bin/activate
 
-PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 100 --seed 42
+PYTHONPATH=. python scripts/train_diffuse_mnist.py --batch-size 400 --seed 42
 
 # PYTHONPATH=. python scripts/diffuse_mnist.py --batch-size 50 --seed 43
 
