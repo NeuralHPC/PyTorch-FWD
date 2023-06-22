@@ -13,8 +13,8 @@ def _parse_args():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=50,
-        help="input batch size for testing (default: 50)",
+        default=30,
+        help="input batch size for testing (default: 30)",
     )
     parser.add_argument(
         "--learning-rate",
@@ -29,7 +29,7 @@ def _parse_args():
         "--seed", type=int, default=42, help="initial seed value (default:42)"
     )
     parser.add_argument(
-        "--time-steps", type=int, default=30, help="steps per diffusion"
+        "--time-steps", type=int, default=40, help="steps per diffusion"
     )
     parser.add_argument(
         "--gpus", type=int, default=-1, help="set gpu no by hand. Use all if -1 (default)."
@@ -38,7 +38,7 @@ def _parse_args():
         "--logdir", type=str, default="./log", help="logdir name."
     )
     parser.add_argument(
-        "--distribute", help="Use for multinode training.", action='store_true'
+        "--distribute", help="TODO: Use for multinode training.", action='store_true'
     )
     
     

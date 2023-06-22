@@ -2,3 +2,4 @@ datasets
 pillow
 matplotlib
 clu
+tensorflow-cpu
