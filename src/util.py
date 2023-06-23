@@ -1,11 +1,15 @@
-from typing import Tuple
+from typing import Tuple, List
+from multiprocessing.pool import ThreadPool
 
+
+from glob import glob
 import argparse
 import jax
 import struct
 import numpy as np
 import jax.numpy as jnp
 
+from PIL import Image
 
 def _parse_args():
     """Parse cmd line args for training an image classifier."""
@@ -80,3 +84,24 @@ def get_mnist_train_data() -> Tuple[np.ndarray, np.ndarray]:
         _, size = struct.unpack(">II", f.read(8))
         lbl_data_train = np.array(np.fromfile(f, dtype=np.dtype(np.uint8)))
     return img_data_train, lbl_data_train
+
+
+def get_batched_celebA_paths(batch_size: int) -> List[np.ndarray]:
+    img_folder_path = '/home/wolter/uni/diffusion/data/celebA/CelebA/Img/img_align_celeba_png/img_align_celeba_png'
+    partition_list = '/home/wolter/uni/diffusion/data/celebA/CelebA/list_eval_partition.txt'
+
+    image_path_list_array = np.array(glob(img_folder_path + '/*.png'))
+    image_count = len(image_path_list_array)
+    image_path_batches = np.array_split(image_path_list_array, image_count//batch_size )
+
+    return image_path_batches
+
+
+def batch_loader(batch_array: np.ndarray) -> np.ndarray:
+    # load a single image batch into memory.
+
+    def load(path: str) -> np.ndarray:
+        return np.array(Image.open(path))
+    arrays = list(map(load, batch_array))
+    # arrays = pool.map(load, batch_array, 64//4)
+    return np.stack(arrays)
