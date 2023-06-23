@@ -4,8 +4,8 @@
 #SBATCH --job-name=diff_train2
 #SBATCH --output=out/diff_train-%j.out
 #SBATCH --error=out/diff_train-%j.err
+#SBATCH --time=24:00:00
 
-source /home/wolter/.bashrc
 conda activate jax
 which python
 

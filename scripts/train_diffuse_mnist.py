@@ -87,7 +87,7 @@ def testing(e, net_state, model, input_shape, writer, time_steps):
     seed = 6
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
     writer.write_images(e, {
-        f'denoise_{time_steps}_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
+        f'fullnoise_{time_steps}_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
     for test_time in [1, time_steps//4, time_steps//2]:
         test_image, rec_mse, _ = sample_net_test(net_state, model, seed, test_time, time_steps)
         writer.write_images(e, {
@@ -198,7 +198,7 @@ def main():
             iterations += 1
             writer.write_scalars(iterations, {"loss": mean_loss})
 
-        if e % 5 == 0:
+        if e % 10 == 0:
             print('testing...')
             testing(e, net_state, model, input_shape, writer,
                     time_steps=args.time_steps)
