@@ -8,6 +8,8 @@ import jax
 import struct
 import numpy as np
 import jax.numpy as jnp
+import pandas as pd
+import os
 
 from PIL import Image
 
@@ -86,11 +88,19 @@ def get_mnist_train_data() -> Tuple[np.ndarray, np.ndarray]:
     return img_data_train, lbl_data_train
 
 
-def get_batched_celebA_paths(batch_size: int) -> List[np.ndarray]:
-    img_folder_path = '/home/wolter/uni/diffusion/data/celebA/CelebA/Img/img_align_celeba_png/img_align_celeba_png'
-    partition_list = '/home/wolter/uni/diffusion/data/celebA/CelebA/list_eval_partition.txt'
+def get_batched_celebA_paths(batch_size: int, split: str = 'train') -> List[np.ndarray]:
+    img_folder_path = '/home/lveerama/Downloads/CelebA/img_align_celeba'
+    partition_list = '/home/lveerama/Downloads/CelebA/list_eval_partition.txt'
+    partition_df = pd.read_csv(partition_list, names=['images', 'split'], sep=' ')
 
-    image_path_list_array = np.array(glob(img_folder_path + '/*.png'))
+    split_val = 0
+    if split == 'validation':
+        split_val = 1
+
+    image_names = []
+    image_names = partition_df[partition_df['split'] == split_val]['images']
+    image_path_list_array = np.array([os.path.join(img_folder_path, image_name) for image_name in image_names])
+
     image_count = len(image_path_list_array)
     image_path_batches = np.array_split(image_path_list_array, image_count//batch_size )
 
