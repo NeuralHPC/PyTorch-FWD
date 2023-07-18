@@ -109,9 +109,20 @@ def get_batched_celebA_paths(batch_size: int, split: str = 'train') -> List[np.n
 
 def batch_loader(batch_array: np.ndarray) -> np.ndarray:
     # load a single image batch into memory.
-
+    labels_list = '/home/lveerama/Downloads/CelebA/identity_CelebA.txt'
+    labels_dict = {}
+    with open(labels_list, 'r') as fp:
+        for line in fp:
+            key, value = line.split(' ')
+            labels_dict[key] = value
     def load(path: str) -> np.ndarray:
         return np.array(Image.open(path))
+
+    def label(path: str) -> np.ndarray:
+        img_name = path.split("/")[-1]
+        return labels_dict[img_name]
+
     arrays = list(map(load, batch_array))
+    labels = list(map(label, batch_array))
     # arrays = pool.map(load, batch_array, 64//4)
-    return np.stack(arrays)
+    return np.stack(arrays), np.stack(labels)

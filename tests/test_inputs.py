@@ -14,5 +14,6 @@ def test_denoise():
     data = get_mnist_test_data()[0]
     data = jnp.array(data[:5]/255)
     key = jax.random.PRNGKey(1)
-    x, y = sample_noise(data, 8, key)
+    max_steps = 10
+    x, y = sample_noise(data, 8, key, max_steps)
     assert jnp.allclose((y+x) , data)
