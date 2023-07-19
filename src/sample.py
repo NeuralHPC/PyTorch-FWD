@@ -28,10 +28,14 @@ def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
             prng_key, shape=[1] + input_shape)
     
     for time in reversed(range(max_steps)):
-        de_noise = model.apply(net_state, 
-            (process_array,
-             jnp.expand_dims(jnp.array(time), -1),
-             jnp.expand_dims(jnp.array([9]), 0)))[:, :, :, 0]
+        # de_noise = model.apply(net_state,
+        #     (process_array,
+        #      jnp.expand_dims(jnp.array(time), -1),
+        #      jnp.expand_dims(jnp.array([9]), 0)))[:, :, :, 0]
+        de_noise = model.apply(net_state,
+               (process_array,
+                jnp.expand_dims(jnp.array(time), -1),
+                jnp.expand_dims(jnp.array([9]), 0)))
         process_array += de_noise
         prng_key = jax.random.split(prng_key, 1)[0]
         process_array = sample_noise(process_array, time, prng_key, max_steps)[0]

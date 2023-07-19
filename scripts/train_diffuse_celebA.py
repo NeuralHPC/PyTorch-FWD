@@ -16,7 +16,7 @@ from flax.core.frozen_dict import FrozenDict
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.util import _parse_args, get_mnist_train_data
+from src.util import _parse_args, get_batched_celebA_paths, batch_loader
 from src.networks import UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test
 
@@ -25,7 +25,7 @@ from src.sample import sample_noise, sample_net_noise, sample_net_test
 @partial(jax.jit, static_argnames=['model'])
 def diff_step(net_state, x, y, labels, time, model):
     denoise = model.apply(net_state, (x, time, labels))
-    cost = jnp.mean(0.5 * (jnp.expand_dims(y, -1) - denoise) ** 2)
+    cost = jnp.mean(0.5 * (y - denoise) ** 2)
     return cost
 
 diff_step_grad = jax.value_and_grad(diff_step, argnums=0)
@@ -76,6 +76,7 @@ def train_step(batch: jnp.ndarray,
 def testing(e, net_state, model, input_shape, writer, time_steps):
     seed = 5
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
+    print(f"Test image shape: {test_image.shape}")
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
     # step tests
@@ -94,6 +95,7 @@ def testing(e, net_state, model, input_shape, writer, time_steps):
             f'test_{test_time}_{seed}': jnp.expand_dims(test_image[0], (0, -1))})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
 
+
 @partial(jax.jit, static_argnames='gpus')
 def norm_and_split(img: jnp.ndarray,
               lbl: jnp.ndarray,
@@ -101,10 +103,11 @@ def norm_and_split(img: jnp.ndarray,
     print(f"Split {img.shape}, into {gpus}")
     if img.shape[0] % gpus != 0:
         img = img[:(img.shape[0]//gpus)*gpus]
-        lbls = jnp.stack(jnp.split(lbl, gpus))
+        lbl = lbl[:(img.shape[0]//gpus)*gpus]
         print(f"lost, images. New shape: {img.shape}")
     img_norm = img / 255.
     img_norm = jnp.stack(jnp.split(img_norm, gpus))
+    lbls = jnp.stack(jnp.split(lbl, gpus))
     print(f"input shape: {img_norm.shape}")
     return img_norm, lbls
 
@@ -134,16 +137,19 @@ def main():
 
     print(f"Working with {gpus} gpus.")
 
-    dataset_img, dataset_labels = get_mnist_train_data()
+    # dataset_img, dataset_labels = get_mnist_train_data()
+    batched_images = get_batched_celebA_paths(batch_size)
+
     print("Data loaded. Starting to train.")
     # train_data = np.stack([np.array(img) for img in dataset['train']['image']])
-    print(f"Splitting {dataset_img.shape}, into {batch_size*gpus} parts. ")
-    splits = len(dataset_img) // (batch_size*gpus)
-    train_batches = np.array_split(dataset_img, splits)
-    train_labels = np.array_split(dataset_labels, splits)
-
-    input_shape = list(np.array(train_batches[0][0]).shape)
-
+    # print(f"Splitting {dataset_img.shape}, into {batch_size*gpus} parts. ")
+    # splits = len(dataset_img) // (batch_size*gpus)
+    # train_batches = np.array_split(dataset_img, splits)
+    # train_labels = np.array_split(dataset_labels, splits)
+    dummy_img_batch, _ = batch_loader(batched_images[0])
+    input_shape = list(dummy_img_batch[0].shape)
+    # input_shape = list(np.array(train_batches[0][0]).shape)
+    print(f"Input shape: {input_shape}")
     model = UNet()
     opt = optax.adam(0.001)
     # create the model state
@@ -185,16 +191,17 @@ def main():
         mean_loss = jnp.mean(mses)
         net_state, opt_state = average_gpus(net_states, opt_states)
         return mean_loss, net_state, opt_state
-    
+    print(f"Total {len(batched_images)} number of batches")
     for e in range(args.epochs):
-        for pos, (img, lbl) in enumerate(zip(train_batches, train_labels)):
+        for pos, train_batches in enumerate(batched_images):
+            img, lbl = batch_loader(train_batches)
             lbl = jnp.expand_dims(lbl, -1)
             mean_loss, net_state, opt_state = central_step(
                 img, lbl, net_state, opt_state, iterations*gpus,
                 model, opt, args.time_steps)
             if pos % 50 == 0:
                 print(e, pos, mean_loss, len(train_batches))
-
+        
             iterations += 1
             writer.write_scalars(iterations, {"loss": mean_loss})
 
