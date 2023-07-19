@@ -78,21 +78,21 @@ def testing(e, net_state, model, input_shape, writer, time_steps):
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
     print(f"Test image shape: {test_image.shape}")
     writer.write_images(e, {
-        f'fullnoise_{time_steps}_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
+        f'fullnoise_{time_steps}_{seed}': test_image})
     # step tests
     for test_time in [1, time_steps//4, time_steps//2]:
-        test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps)
-        writer.write_images(e, {f'test_{test_time}_{seed}': jnp.expand_dims(test_image[0], (0, -1))})
+        test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps, 400)
+        writer.write_images(e, {f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
         
     seed = 6
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
     writer.write_images(e, {
-        f'fullnoise_{time_steps}_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
+        f'fullnoise_{time_steps}_{seed}': test_image})
     for test_time in [1, time_steps//4, time_steps//2]:
-        test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps)
+        test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps, 400)
         writer.write_images(e, {
-            f'test_{test_time}_{seed}': jnp.expand_dims(test_image[0], (0, -1))})
+            f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
 
 
@@ -193,17 +193,17 @@ def main():
         return mean_loss, net_state, opt_state
     print(f"Total {len(batched_images)} number of batches")
     for e in range(args.epochs):
-        # for pos, train_batches in enumerate(batched_images):
-        #     img, lbl = batch_loader(train_batches)
-        #     lbl = jnp.expand_dims(lbl, -1)
-        #     mean_loss, net_state, opt_state = central_step(
-        #         img, lbl, net_state, opt_state, iterations*gpus,
-        #         model, opt, args.time_steps)
-        #     if pos % 50 == 0:
-        #         print(e, pos, mean_loss, len(train_batches))
+        for pos, train_batches in enumerate(batched_images):
+            img, lbl = batch_loader(train_batches)
+            lbl = jnp.expand_dims(lbl, -1)
+            mean_loss, net_state, opt_state = central_step(
+                img, lbl, net_state, opt_state, iterations*gpus,
+                model, opt, args.time_steps)
+            if pos % 50 == 0:
+                print(e, pos, mean_loss, len(train_batches))
         
-        #     iterations += 1
-        #     writer.write_scalars(iterations, {"loss": mean_loss})
+            iterations += 1
+            writer.write_scalars(iterations, {"loss": mean_loss})
 
         if e % 10 == 0:
             print('testing...')

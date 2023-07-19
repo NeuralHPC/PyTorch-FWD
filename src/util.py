@@ -114,9 +114,11 @@ def batch_loader(batch_array: np.ndarray) -> np.ndarray:
     with open(labels_list, 'r') as fp:
         for line in fp:
             key, value = line.split(' ')
-            labels_dict[key] = value
+            labels_dict[key] = int(value)
     def load(path: str) -> np.ndarray:
-        return np.array(Image.open(path))
+        img = Image.open(path)
+        img = img.resize((32, 32), Image.Resampling.LANCZOS)
+        return img
 
     def label(path: str) -> np.ndarray:
         img_name = path.split("/")[-1]
