@@ -65,7 +65,6 @@ def sample_net_test_celebA(net_state: FrozenDict, model: nn.Module, key:int,
     images, labels = batch_loader(batched_imgs[0])
     test_img, test_lbl = images[:5], labels[:5]
     test_img = test_img/255.
-    print(test_img.shape, test_lbl.shape)
     x, y = sample_noise(test_img, test_time_step, key, max_steps)
     y_hat = model.apply(net_state,(
         x,

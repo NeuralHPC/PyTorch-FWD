@@ -76,7 +76,6 @@ def train_step(batch: jnp.ndarray,
 def testing(e, net_state, model, input_shape, writer, time_steps):
     seed = 5
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
-    print(f"Test image shape: {test_image.shape}")
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
     # step tests
@@ -205,7 +204,7 @@ def main():
             iterations += 1
             writer.write_scalars(iterations, {"loss": mean_loss})
 
-        if e % 10 == 0:
+        if e % 5 == 0:
             print('testing...')
             testing(e, net_state, model, input_shape, writer,
                     time_steps=args.time_steps)

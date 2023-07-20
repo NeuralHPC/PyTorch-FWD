@@ -117,7 +117,7 @@ def batch_loader(batch_array: np.ndarray) -> np.ndarray:
             labels_dict[key] = int(value)
     def load(path: str) -> np.ndarray:
         img = Image.open(path)
-        img = img.resize((32, 32), Image.Resampling.LANCZOS)
+        img = img.resize((64, 64), Image.Resampling.LANCZOS)
         return img
 
     def label(path: str) -> np.ndarray:
