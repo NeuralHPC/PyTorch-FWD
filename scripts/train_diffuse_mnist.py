@@ -98,11 +98,12 @@ def testing(e, net_state, model, input_shape, writer, time_steps):
 def norm_and_split(img: jnp.ndarray,
               lbl: jnp.ndarray,
               gpus: int):
-    img_norm = img / 255.
     print(f"Split {img.shape}, into {gpus}")
     if img.shape[0] % gpus != 0:
         img = img[:(img.shape[0]//gpus)*gpus]
+        lbl = lbl[:(lbl.shape[0]//gpus)*gpus]
         print(f"lost, images. New shape: {img.shape}")
+    img_norm = img / 255.
     img_norm = jnp.stack(jnp.split(img_norm, gpus))
     lbls = jnp.stack(jnp.split(lbl, gpus))
     print(f"input shape: {img_norm.shape}")
