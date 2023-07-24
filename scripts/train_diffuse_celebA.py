@@ -2,6 +2,8 @@ import datetime
 import pickle
 from typing import List, Dict
 from functools import partial
+from multiprocess import Pool
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from clu import metric_writers
 
@@ -16,7 +18,7 @@ from flax.core.frozen_dict import FrozenDict
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.util import _parse_args, get_batched_celebA_paths, batch_loader
+from src.util import _parse_args, get_batched_celebA_paths, batch_loader, get_label_dict
 from src.networks import UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA
 
@@ -138,6 +140,7 @@ def main():
 
     # dataset_img, dataset_labels = get_mnist_train_data()
     batched_images = get_batched_celebA_paths(batch_size)
+    labels_dict = get_label_dict('/home/wolter/uni/diffusion/data/celebA/CelebA/Anno/identity_CelebA.txt')
 
     print("Data loaded. Starting to train.")
     # train_data = np.stack([np.array(img) for img in dataset['train']['image']])
@@ -145,7 +148,7 @@ def main():
     # splits = len(dataset_img) // (batch_size*gpus)
     # train_batches = np.array_split(dataset_img, splits)
     # train_labels = np.array_split(dataset_labels, splits)
-    dummy_img_batch, _ = batch_loader(batched_images[0])
+    dummy_img_batch, _ = batch_loader(batched_images[0], labels_dict)
     input_shape = list(dummy_img_batch[0].shape)
     # input_shape = list(np.array(train_batches[0][0]).shape)
     print(f"Input shape: {input_shape}")
@@ -190,27 +193,36 @@ def main():
         mean_loss = jnp.mean(mses)
         net_state, opt_state = average_gpus(net_states, opt_states)
         return mean_loss, net_state, opt_state
-    print(f"Total {len(batched_images)} number of batches")
-    for e in range(args.epochs):
-        for pos, train_batches in enumerate(batched_images):
-            img, lbl = batch_loader(train_batches)
-            lbl = jnp.expand_dims(lbl, -1)
-            mean_loss, net_state, opt_state = central_step(
-                img, lbl, net_state, opt_state, iterations*gpus,
-                model, opt, args.time_steps)
-            if pos % 50 == 0:
-                print(e, pos, mean_loss, len(train_batches))
-        
-            iterations += 1
-            writer.write_scalars(iterations, {"loss": mean_loss})
 
-        if e % 5 == 0:
-            print('testing...')
-            testing(e, net_state, model, input_shape, writer,
-                    time_steps=args.time_steps)
-            to_storage = (net_state, opt_state, model)
-            with open(f'log/checkpoints/e_{e}_time_{now}.pkl', 'wb') as f:
-                pickle.dump(to_storage, f)
+
+    print(f"Total {len(batched_images)} number of batches")
+    path_batches = get_batched_celebA_paths(args.batch_size)
+    total = len(path_batches)
+    batch_loader_w_dict = partial(batch_loader, labels_dict=labels_dict)
+
+    for e in range(args.epochs):
+        with ThreadPoolExecutor() as executor:
+            load_asinc_dict = {executor.submit(batch_loader_w_dict, path_batch): path_batch
+                            for path_batch in path_batches}
+            for pos, future_train_batches in enumerate(as_completed(load_asinc_dict)):
+                img, lbl = future_train_batches.result()
+                lbl = jnp.expand_dims(lbl, -1)
+                mean_loss, net_state, opt_state = central_step(
+                    img, lbl, net_state, opt_state, iterations*gpus,
+                    model, opt, args.time_steps)
+                if pos % 50 == 0:
+                    print(e, pos, mean_loss, len(load_asinc_dict))
+            
+                iterations += 1
+                writer.write_scalars(iterations, {"loss": mean_loss})
+
+            if e % 5 == 0:
+                print('testing...')
+                testing(e, net_state, model, input_shape, writer,
+                        time_steps=args.time_steps)
+                to_storage = (net_state, opt_state, model)
+                with open(f'log/checkpoints/e_{e}_time_{now}.pkl', 'wb') as f:
+                    pickle.dump(to_storage, f)
 
 
     print('testing...')

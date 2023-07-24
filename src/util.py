@@ -1,5 +1,5 @@
-from typing import Tuple, List, Optional
-from multiprocessing.pool import ThreadPool
+from typing import Tuple, List, Optional, Dict
+from concurrent.futures import ThreadPoolExecutor
 
 
 from glob import glob
@@ -14,6 +14,7 @@ import pandas as pd
 import os
 
 
+
 from PIL import Image
 
 def _parse_args():
@@ -22,8 +23,8 @@ def _parse_args():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=30,
-        help="input batch size for testing (default: 30)",
+        default=50,
+        help="input batch size for testing (default: 50)",
     )
     parser.add_argument(
         "--learning-rate",
@@ -93,8 +94,8 @@ def get_mnist_train_data() -> Tuple[np.ndarray, np.ndarray]:
 
 
 def get_batched_celebA_paths(batch_size: int, split: str = 'train') -> List[np.ndarray]:
-    img_folder_path = '/home/lveerama/Downloads/CelebA/img_align_celeba'
-    partition_list = '/home/lveerama/Downloads/CelebA/list_eval_partition.txt'
+    img_folder_path = '/home/wolter/uni/diffusion/data/celebA/CelebA/Img/img_align_celeba_png/img_align_celeba_png'
+    partition_list = '/home/wolter/uni/diffusion/data/celebA/CelebA/Eval/list_eval_partition.txt'
     partition_df = pd.read_csv(partition_list, names=['images', 'split'], sep=' ')
 
     split_val = 0
@@ -103,41 +104,51 @@ def get_batched_celebA_paths(batch_size: int, split: str = 'train') -> List[np.n
 
     image_names = []
     image_names = partition_df[partition_df['split'] == split_val]['images']
+    image_names = [image_name.split('.')[0] + ".png" for image_name in image_names]
     image_path_list_array = np.array([os.path.join(img_folder_path, image_name) for image_name in image_names])
-
+    
     image_count = len(image_path_list_array)
     image_path_batches = np.array_split(image_path_list_array, image_count//batch_size )
 
     return image_path_batches
 
 
-def batch_loader(batch_array: np.ndarray) -> np.ndarray:
-    # load a single image batch into memory.
-    labels_list = '/home/lveerama/Downloads/CelebA/identity_CelebA.txt'
+
+def get_label_dict(path: str) -> Dict[str, int]:
+    # '/home/wolter/uni/diffusion/data/celebA/CelebA/Anno/identity_CelebA.txt'
     labels_dict = {}
-    with open(labels_list, 'r') as fp:
+    with open(path, 'r') as fp:
         for line in fp:
+            line = line.replace('\n', '')
             key, value = line.split(' ')
+            key = key.split('.')[0]
             labels_dict[key] = int(value)
+    return labels_dict
+
+
+def batch_loader(batch_array: np.ndarray, labels_dict: Dict[str, int],
+                 resize: Tuple[int, int] = (64, 64)) -> np.ndarray:
+    # load a single image batch into memory.
+
     def load(path: str) -> np.ndarray:
         img = Image.open(path)
-        img = img.resize((64, 64), Image.Resampling.LANCZOS)
+        img = img.resize(resize, Image.Resampling.LANCZOS)
         return img
 
     def label(path: str) -> np.ndarray:
-        img_name = path.split("/")[-1]
+        img_name = path.split("/")[-1].split(".")[0]
         return labels_dict[img_name]
 
-    arrays = list(map(load, batch_array))
-    labels = list(map(label, batch_array))
-    # arrays = pool.map(load, batch_array, 64//4)
+    with ThreadPoolExecutor(max_workers=8) as p:
+        arrays = list(p.map(load, batch_array))
+        labels = list(p.map(label, batch_array))
     return np.stack(arrays), np.stack(labels)
 
 
 def multi_batch_loader(batch_list):
     # batches = list(map(batch_loader, batch_list))
-    with ThreadPool() as p:
-        batches = p.map(batch_loader, batch_list, chunksize=5)
+    with ThreadPoolExecutor() as p:
+        batches = p.map(batch_loader, batch_list, chunksize=10)
     return batches
 
 
