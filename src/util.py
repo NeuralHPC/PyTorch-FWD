@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 from multiprocessing.pool import ThreadPool
 
 
@@ -8,6 +8,8 @@ import jax
 import struct
 import numpy as np
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import matplotlib.animation as manimation
 
 from PIL import Image
 
@@ -88,6 +90,7 @@ def get_mnist_train_data() -> Tuple[np.ndarray, np.ndarray]:
 
 def get_batched_celebA_paths(batch_size: int) -> List[np.ndarray]:
     img_folder_path = '/home/wolter/uni/diffusion/data/celebA/CelebA/Img/img_align_celeba_png/img_align_celeba_png'
+    # TODO: implement a train/test split.
     partition_list = '/home/wolter/uni/diffusion/data/celebA/CelebA/list_eval_partition.txt'
 
     image_path_list_array = np.array(glob(img_folder_path + '/*.png'))
@@ -105,3 +108,55 @@ def batch_loader(batch_array: np.ndarray) -> np.ndarray:
     arrays = list(map(load, batch_array))
     # arrays = pool.map(load, batch_array, 64//4)
     return np.stack(arrays)
+
+
+def multi_batch_loader(batch_list):
+    # batches = list(map(batch_loader, batch_list))
+    with ThreadPool() as p:
+        batches = p.map(batch_loader, batch_list, chunksize=5)
+    return batches
+
+
+
+def write_movie(
+    images: List[np.ndarray],
+    name: Optional[str] = "diff_movie",
+    xlim: Optional[int] = 3,
+    ylim: Optional[int] = 3,
+):
+    """Write the optimization steps into a mp4-movie file.
+
+    Args:
+        images (list): A list with diffusion steps.
+        name (str, optional): The name of the movie file. Defaults to "grad_movie".
+        xlim (int, optional): Largest x value in the data. Defaults to 3.
+        ylim (int, optional): Largest y value in the data. Defaults to 3.
+    
+    Raises:
+        RuntimeError: If conda ffmpeg package is not installed.
+    """
+    try:
+        ffmpeg_writer = manimation.writers["ffmpeg"]
+    except RuntimeError:
+        raise RuntimeError(
+            "RuntimeError: If you are using anaconda or miniconda there might "
+            "be a missing package named ffmpeg. Try installing it with "
+            "'conda install -c conda-forge ffmpeg' in your terminal."
+        )
+
+    metadata = dict(
+        title="Diffusion", artist="Matplotlib", comment="Diffusion movie!"
+    )
+    writer = ffmpeg_writer(fps=3, metadata=metadata)
+
+    fig = plt.figure()
+    l = plt.imshow(images[0]/np.max(np.abs(images[0])))
+    plt.colorbar()
+
+    # plt.xlim(-xlim, xlim)
+    # plt.ylim(-ylim, ylim)
+
+    with writer.saving(fig, f"{name}.gif", 100):
+        for img in images:
+            l.set_data(img/np.max(np.abs(img)))
+            writer.grab_frame()
