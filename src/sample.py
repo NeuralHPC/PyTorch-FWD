@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -60,11 +60,8 @@ def sample_net_test(net_state: FrozenDict, model: nn.Module, key: int,
 
 
 def sample_net_test_celebA(net_state: FrozenDict, model: nn.Module, key:int,
-        test_time_step: int, max_steps: int, test_data):
-    # batched_imgs = get_batched_celebA_paths(data_dir=data_dir, split='validation')
+        test_time_step: int, max_steps: int, test_data: Tuple):
     key = jax.random.PRNGKey(key)
-    # images, labels = batch_loader(batched_imgs[0])
-    # test_img, test_lbl = images[:5], labels[:5]
     test_img, test_lbl = test_data
     test_img = test_img/255.
     x, y = sample_noise(test_img, test_time_step, key, max_steps)
