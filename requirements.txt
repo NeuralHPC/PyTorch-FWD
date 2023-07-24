@@ -3,3 +3,5 @@ pillow
 matplotlib
 clu
 tensorflow-cpu
+pandas
+multiprocess

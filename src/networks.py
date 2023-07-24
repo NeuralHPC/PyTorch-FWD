@@ -22,6 +22,7 @@ def pad_odd(input_x: jnp.ndarray) -> jnp.ndarray:
 
 
 class UNet(nn.Module):
+    output_channels: int
     transpose_conv = False
     base_feat_no = 64
 
@@ -90,5 +91,5 @@ class UNet(nn.Module):
         x9 = x9 + x2
         x10 = up_block(x9, x1, init_feat, time_lbl)  # TODO: Too small??
         y = nn.Conv(
-            features=3, kernel_size=(1, 1), padding="SAME")(x10)
+            features=self.output_channels, kernel_size=(1, 1), padding="SAME")(x10)
         return y

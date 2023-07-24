@@ -2,6 +2,7 @@ import datetime
 import pickle
 from typing import List, Dict
 from functools import partial
+import os
 
 from clu import metric_writers
 
@@ -24,7 +25,7 @@ from src.sample import sample_noise, sample_net_noise, sample_net_test
 
 @partial(jax.jit, static_argnames=['model'])
 def diff_step(net_state, x, y, labels, time, model):
-    denoise = model.apply(net_state, (x, time, labels))
+    denoise = model.apply(net_state, (jnp.expand_dims(x, -1), time, labels))
     cost = jnp.mean(0.5 * (jnp.expand_dims(y, -1) - denoise) ** 2)
     return cost
 
@@ -73,25 +74,25 @@ def train_step(batch: jnp.ndarray,
     return mse, net_state, opt_state
 
 
-def testing(e, net_state, model, input_shape, writer, time_steps):
+def testing(e, net_state, model, input_shape, writer, time_steps, data_dir):
     seed = 5
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
     writer.write_images(e, {
-        f'fullnoise_{time_steps}_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
+        f'fullnoise_{time_steps}_{seed}': test_image})
     # step tests
     for test_time in [1, time_steps//4, time_steps//2]:
-        test_image, rec_mse, _ = sample_net_test(net_state, model, seed, test_time, time_steps)
-        writer.write_images(e, {f'test_{test_time}_{seed}': jnp.expand_dims(test_image[0], (0, -1))})
+        test_image, rec_mse, _ = sample_net_test(net_state, model, seed, test_time, time_steps, data_dir)
+        writer.write_images(e, {f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
         
     seed = 6
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
     writer.write_images(e, {
-        f'fullnoise_{time_steps}_{seed}': jnp.expand_dims(jnp.expand_dims(test_image,0), -1)})
+        f'fullnoise_{time_steps}_{seed}': test_image})
     for test_time in [1, time_steps//4, time_steps//2]:
-        test_image, rec_mse, _ = sample_net_test(net_state, model, seed, test_time, time_steps)
+        test_image, rec_mse, _ = sample_net_test(net_state, model, seed, test_time, time_steps, data_dir)
         writer.write_images(e, {
-            f'test_{test_time}_{seed}': jnp.expand_dims(test_image[0], (0, -1))})
+            f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
 
 @partial(jax.jit, static_argnames='gpus')
@@ -101,10 +102,11 @@ def norm_and_split(img: jnp.ndarray,
     print(f"Split {img.shape}, into {gpus}")
     if img.shape[0] % gpus != 0:
         img = img[:(img.shape[0]//gpus)*gpus]
-        lbls = jnp.stack(jnp.split(lbl, gpus))
+        lbl = lbl[:(lbl.shape[0]//gpus)*gpus]
         print(f"lost, images. New shape: {img.shape}")
     img_norm = img / 255.
     img_norm = jnp.stack(jnp.split(img_norm, gpus))
+    lbls = jnp.stack(jnp.split(lbl, gpus))
     print(f"input shape: {img_norm.shape}")
     return img_norm, lbls
 
@@ -134,7 +136,7 @@ def main():
 
     print(f"Working with {gpus} gpus.")
 
-    dataset_img, dataset_labels = get_mnist_train_data()
+    dataset_img, dataset_labels = get_mnist_train_data(args.data_dir)
     print("Data loaded. Starting to train.")
     # train_data = np.stack([np.array(img) for img in dataset['train']['image']])
     print(f"Splitting {dataset_img.shape}, into {batch_size*gpus} parts. ")
@@ -142,9 +144,9 @@ def main():
     train_batches = np.array_split(dataset_img, splits)
     train_labels = np.array_split(dataset_labels, splits)
 
-    input_shape = list(np.array(train_batches[0][0]).shape)
+    input_shape = list(np.array(train_batches[0][0]).shape) + [1] # Add channel dim
 
-    model = UNet()
+    model = UNet(output_channels=1)
     opt = optax.adam(0.001)
     # create the model state
     net_state = model.init(key, 
@@ -197,18 +199,20 @@ def main():
 
             iterations += 1
             writer.write_scalars(iterations, {"loss": mean_loss})
+            break
 
         if e % 10 == 0:
             print('testing...')
             testing(e, net_state, model, input_shape, writer,
-                    time_steps=args.time_steps)
+                    time_steps=args.time_steps, data_dir=args.data_dir)
             to_storage = (net_state, opt_state, model)
+            os.makedirs('log/checkpoints/', exist_ok=True)
             with open(f'log/checkpoints/e_{e}_time_{now}.pkl', 'wb') as f:
                 pickle.dump(to_storage, f)
 
 
     print('testing...')
-    testing(e, net_state, model, input_shape, writer, time_steps=args.time_steps)
+    testing(e, net_state, model, input_shape, writer, time_steps=args.time_steps, data_dir=args.data_dir)
 
 
 if __name__ == '__main__':

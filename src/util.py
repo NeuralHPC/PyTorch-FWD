@@ -50,53 +50,65 @@ def _parse_args():
     parser.add_argument(
         "--distribute", help="TODO: Use for multinode training.", action='store_true'
     )
+    parser.add_argument(
+        "--data_dir", required=True, help="Base dataset path"
+    )
     
     
     return parser.parse_args()
 
-def get_mnist_test_data() -> Tuple[np.ndarray, np.ndarray]:
+def get_mnist_test_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     """Return the mnist test data set in numpy arrays.
 
     Returns:
-        (array, array): A touple containing the test
+        (array, array): A tuple containing the test
         images and labels.
     """
-    with open("./data/MNIST/raw/t10k-images-idx3-ubyte", "rb") as f:
+    test_imgs_path = os.path.join(data_dir, 'raw/t10k-images-idx3-ubyte')
+    test_lbls_path = os.path.join(data_dir, 'raw/t10k-labels-idx1-ubyte')
+    
+    with open(test_imgs_path, "rb") as f:
         _, size = struct.unpack(">II", f.read(8))
         nrows, ncols = struct.unpack(">II", f.read(8))
         data = np.array(np.fromfile(f, dtype=np.dtype(np.uint8).newbyteorder(">")))
         img_data_test = data.reshape((size, nrows, ncols))
 
-    with open("./data/MNIST/raw/t10k-labels-idx1-ubyte", "rb") as f:
+    with open(test_lbls_path, "rb") as f:
         _, size = struct.unpack(">II", f.read(8))
         lbl_data_test = np.array(np.fromfile(f, dtype=np.dtype(np.uint8)))
     return img_data_test, lbl_data_test
 
 
-def get_mnist_train_data() -> Tuple[np.ndarray, np.ndarray]:
+def get_mnist_train_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     """Load the mnist training data set.
 
     Returns:
-        (array, array): A touple containing the training
+        (array, array): A tuple containing the training
         images and labels.
     """
-    with open("./data/MNIST/raw/train-images-idx3-ubyte", "rb") as f:
+    train_imgs_path = os.path.join(data_dir, 'raw/train-images-idx3-ubyte')
+    train_labels_path = os.path.join(data_dir, 'raw/train-labels-idx1-ubyte')
+
+    with open(train_imgs_path, "rb") as f:
         _, size = struct.unpack(">II", f.read(8))
         nrows, ncols = struct.unpack(">II", f.read(8))
         data = np.array(np.fromfile(f, dtype=np.dtype(np.uint8).newbyteorder(">")))
         img_data_train = data.reshape((size, nrows, ncols))
 
-    with open("./data/MNIST/raw/train-labels-idx1-ubyte", "rb") as f:
+    with open(train_labels_path, "rb") as f:
         _, size = struct.unpack(">II", f.read(8))
         lbl_data_train = np.array(np.fromfile(f, dtype=np.dtype(np.uint8)))
     return img_data_train, lbl_data_train
 
 
 
-def get_batched_celebA_paths(batch_size: int, split: str = 'train') -> List[np.ndarray]:
-    img_folder_path = '/home/wolter/uni/diffusion/data/celebA/CelebA/Img/img_align_celeba_png/img_align_celeba_png'
-    partition_list = '/home/wolter/uni/diffusion/data/celebA/CelebA/Eval/list_eval_partition.txt'
-    partition_df = pd.read_csv(partition_list, names=['images', 'split'], sep=' ')
+def get_batched_celebA_paths(data_dir: str, batch_size: int = 50, split: str = 'train') -> List[np.ndarray]:
+    # img_folder_path = '/home/wolter/uni/diffusion/data/celebA/CelebA/Img/img_align_celeba_png/img_align_celeba_png'
+    img_folder_path = os.path.join(data_dir, 'Img/img_align_celeba/')
+    # partition_list = '/home/wolter/uni/diffusion/data/celebA/CelebA/Eval/list_eval_partition.txt'
+    partition_path = os.path.join(data_dir, 'Eval/list_eval_partition.txt')
+    labels_path = os.path.join(data_dir, 'Anno/identity_CelebA.txt')
+    partition_df = pd.read_csv(partition_path, names=['images', 'split'], sep=' ')
 
     split_val = 0
     if split == 'validation':
@@ -104,13 +116,14 @@ def get_batched_celebA_paths(batch_size: int, split: str = 'train') -> List[np.n
 
     image_names = []
     image_names = partition_df[partition_df['split'] == split_val]['images']
-    image_names = [image_name.split('.')[0] + ".png" for image_name in image_names]
+    image_names = [image_name.split('.')[0] + ".jpg" for image_name in image_names]
     image_path_list_array = np.array([os.path.join(img_folder_path, image_name) for image_name in image_names])
     
     image_count = len(image_path_list_array)
     image_path_batches = np.array_split(image_path_list_array, image_count//batch_size )
 
-    return image_path_batches
+    labels_dict = get_label_dict(labels_path)
+    return image_path_batches, labels_dict
 
 
 

@@ -42,16 +42,17 @@ def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
     return process_array[0]
 
 def sample_net_test(net_state: FrozenDict, model: nn.Module, key: int,
-        test_time_step: int, max_steps: int):
-    test_img, test_lbl = get_mnist_test_data()
+        test_time_step: int, max_steps: int, data_dir: str):
+    test_img, test_lbl = get_mnist_test_data(data_dir)
     test_img, test_lbl = test_img[:5], test_lbl[:5]
+    test_img = jnp.expand_dims(test_img, -1)
     test_img = test_img/255.
     key = jax.random.PRNGKey(key)
     x, y = sample_noise(test_img, test_time_step, key, max_steps)
     yhat = model.apply(net_state, (
         x,
         jnp.expand_dims(jnp.array(test_time_step), -1),
-        jnp.expand_dims(test_lbl, -1)))[..., 0]
+        jnp.expand_dims(test_lbl, -1)))
     rec = x + yhat
     rec_mse = jnp.mean(rec**2)
     noise_mse = jnp.mean((y-yhat)**2)
@@ -59,11 +60,12 @@ def sample_net_test(net_state: FrozenDict, model: nn.Module, key: int,
 
 
 def sample_net_test_celebA(net_state: FrozenDict, model: nn.Module, key:int,
-        test_time_step: int, max_steps: int, batch_size: int):
-    batched_imgs = get_batched_celebA_paths(batch_size, 'validation')
+        test_time_step: int, max_steps: int, test_data):
+    # batched_imgs = get_batched_celebA_paths(data_dir=data_dir, split='validation')
     key = jax.random.PRNGKey(key)
-    images, labels = batch_loader(batched_imgs[0])
-    test_img, test_lbl = images[:5], labels[:5]
+    # images, labels = batch_loader(batched_imgs[0])
+    # test_img, test_lbl = images[:5], labels[:5]
+    test_img, test_lbl = test_data
     test_img = test_img/255.
     x, y = sample_noise(test_img, test_time_step, key, max_steps)
     y_hat = model.apply(net_state,(
