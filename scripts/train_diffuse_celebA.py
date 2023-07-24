@@ -214,7 +214,6 @@ def main():
             
                 iterations += 1
                 writer.write_scalars(iterations, {"loss": mean_loss})
-                break
 
             if e % 5 == 0:
                 print('testing...')

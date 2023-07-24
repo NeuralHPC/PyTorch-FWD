@@ -10,3 +10,14 @@ Steps:
 2. Download and extract img_align_celeba.zip from Img folder.
 3. Then download list_eval_partition.txt from Eval and finally download labels file (identity_CelebA.txt) from Anno folder.
 4. Please provide paths to corresponding variables in src/util.py functions get_batched_celebA_paths and batch_loader.
+
+# Training
+
+To run Diffusion on MNIST
+```
+PYTHONPATH=. python scripts/train_diffuse_mnist.py --batch-size 100 --seed 42 --epochs 400 --data_dir <path to data>
+```
+Diffusion on CelebA
+```
+PYTHONPATH=. python scripts/train_diffuse_celebA.py --batch-size 10 --seed 42 --epochs 200 --data_dir <path to data>
+```
