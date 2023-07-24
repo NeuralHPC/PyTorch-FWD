@@ -10,6 +10,9 @@ import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import matplotlib.animation as manimation
+import pandas as pd
+import os
+
 
 from PIL import Image
 
@@ -88,12 +91,20 @@ def get_mnist_train_data() -> Tuple[np.ndarray, np.ndarray]:
     return img_data_train, lbl_data_train
 
 
-def get_batched_celebA_paths(batch_size: int) -> List[np.ndarray]:
-    img_folder_path = '/home/wolter/uni/diffusion/data/celebA/CelebA/Img/img_align_celeba_png/img_align_celeba_png'
-    # TODO: implement a train/test split.
-    partition_list = '/home/wolter/uni/diffusion/data/celebA/CelebA/list_eval_partition.txt'
 
-    image_path_list_array = np.array(glob(img_folder_path + '/*.png'))
+def get_batched_celebA_paths(batch_size: int, split: str = 'train') -> List[np.ndarray]:
+    img_folder_path = '/home/lveerama/Downloads/CelebA/img_align_celeba'
+    partition_list = '/home/lveerama/Downloads/CelebA/list_eval_partition.txt'
+    partition_df = pd.read_csv(partition_list, names=['images', 'split'], sep=' ')
+
+    split_val = 0
+    if split == 'validation':
+        split_val = 1
+
+    image_names = []
+    image_names = partition_df[partition_df['split'] == split_val]['images']
+    image_path_list_array = np.array([os.path.join(img_folder_path, image_name) for image_name in image_names])
+
     image_count = len(image_path_list_array)
     image_path_batches = np.array_split(image_path_list_array, image_count//batch_size )
 
@@ -102,12 +113,25 @@ def get_batched_celebA_paths(batch_size: int) -> List[np.ndarray]:
 
 def batch_loader(batch_array: np.ndarray) -> np.ndarray:
     # load a single image batch into memory.
-
+    labels_list = '/home/lveerama/Downloads/CelebA/identity_CelebA.txt'
+    labels_dict = {}
+    with open(labels_list, 'r') as fp:
+        for line in fp:
+            key, value = line.split(' ')
+            labels_dict[key] = int(value)
     def load(path: str) -> np.ndarray:
-        return np.array(Image.open(path))
+        img = Image.open(path)
+        img = img.resize((64, 64), Image.Resampling.LANCZOS)
+        return img
+
+    def label(path: str) -> np.ndarray:
+        img_name = path.split("/")[-1]
+        return labels_dict[img_name]
+
     arrays = list(map(load, batch_array))
+    labels = list(map(label, batch_array))
     # arrays = pool.map(load, batch_array, 64//4)
-    return np.stack(arrays)
+    return np.stack(arrays), np.stack(labels)
 
 
 def multi_batch_loader(batch_list):
@@ -160,3 +184,4 @@ def write_movie(
         for img in images:
             l.set_data(img/np.max(np.abs(img)))
             writer.grab_frame()
+
