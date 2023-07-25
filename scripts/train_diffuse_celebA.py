@@ -2,6 +2,8 @@ import datetime
 import pickle
 from typing import List, Dict
 from functools import partial
+from multiprocess import Pool
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 
 from clu import metric_writers
@@ -17,16 +19,16 @@ from flax.core.frozen_dict import FrozenDict
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.util import _parse_args, get_mnist_train_data
+from src.util import _parse_args, get_batched_celebA_paths, batch_loader, get_label_dict
 from src.networks import UNet
-from src.sample import sample_noise, sample_net_noise, sample_net_test
+from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA
 
 
 
 @partial(jax.jit, static_argnames=['model'])
 def diff_step(net_state, x, y, labels, time, model):
-    denoise = model.apply(net_state, (jnp.expand_dims(x, -1), time, labels))
-    cost = jnp.mean(0.5 * (jnp.expand_dims(y, -1) - denoise) ** 2)
+    denoise = model.apply(net_state, (x, time, labels))
+    cost = jnp.mean(0.5 * (y - denoise) ** 2)
     return cost
 
 diff_step_grad = jax.value_and_grad(diff_step, argnums=0)
@@ -74,14 +76,14 @@ def train_step(batch: jnp.ndarray,
     return mse, net_state, opt_state
 
 
-def testing(e, net_state, model, input_shape, writer, time_steps, data_dir):
+def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
     seed = 5
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
     # step tests
     for test_time in [1, time_steps//4, time_steps//2]:
-        test_image, rec_mse, _ = sample_net_test(net_state, model, seed, test_time, time_steps, data_dir)
+        test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps, test_data)
         writer.write_images(e, {f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
         
@@ -90,10 +92,11 @@ def testing(e, net_state, model, input_shape, writer, time_steps, data_dir):
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
     for test_time in [1, time_steps//4, time_steps//2]:
-        test_image, rec_mse, _ = sample_net_test(net_state, model, seed, test_time, time_steps, data_dir)
+        test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps, test_data)
         writer.write_images(e, {
             f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
+
 
 @partial(jax.jit, static_argnames='gpus')
 def norm_and_split(img: jnp.ndarray,
@@ -102,7 +105,7 @@ def norm_and_split(img: jnp.ndarray,
     print(f"Split {img.shape}, into {gpus}")
     if img.shape[0] % gpus != 0:
         img = img[:(img.shape[0]//gpus)*gpus]
-        lbl = lbl[:(lbl.shape[0]//gpus)*gpus]
+        lbl = lbl[:(img.shape[0]//gpus)*gpus]
         print(f"lost, images. New shape: {img.shape}")
     img_norm = img / 255.
     img_norm = jnp.stack(jnp.split(img_norm, gpus))
@@ -126,27 +129,35 @@ def average_gpus(net_states: FrozenDict,
 def main():
     args = _parse_args()
     print(args)
+    
     now = datetime.datetime.now()
+    
     writer = metric_writers.create_default_writer(args.logdir + f"/{now}")
 
     np.random.seed(args.seed)
     key = jax.random.PRNGKey(args.seed)
+    
     batch_size = args.batch_size
     gpus = args.gpus if args.gpus > 0 else jax.local_device_count() 
 
     print(f"Working with {gpus} gpus.")
 
-    dataset_img, dataset_labels = get_mnist_train_data(args.data_dir)
+    path_batches, labels_dict = get_batched_celebA_paths(args.data_dir, batch_size)
+
     print("Data loaded. Starting to train.")
-    # train_data = np.stack([np.array(img) for img in dataset['train']['image']])
-    print(f"Splitting {dataset_img.shape}, into {batch_size*gpus} parts. ")
-    splits = len(dataset_img) // (batch_size*gpus)
-    train_batches = np.array_split(dataset_img, splits)
-    train_labels = np.array_split(dataset_labels, splits)
+    dummy_img_batch, _ = batch_loader(path_batches[0], labels_dict)
+    input_shape = list(dummy_img_batch[0].shape)
+    print(f"Total {len(path_batches)} number of batches")
+    batch_loader_w_dict = partial(batch_loader, labels_dict=labels_dict)
+    print(f"Input shape: {input_shape}")
 
-    input_shape = list(np.array(train_batches[0][0]).shape) + [1] # Add channel dim
+    # Load test data images
+    test_patches, _ = get_batched_celebA_paths(args.data_dir, split='validation')
+    imgs, labels = batch_loader(test_patches[0], labels_dict)
+    test_data = (imgs[:5], labels[:5])
 
-    model = UNet(output_channels=1)
+
+    model = UNet(output_channels=input_shape[-1])
     opt = optax.adam(0.001)
     # create the model state
     net_state = model.init(key, 
@@ -187,31 +198,35 @@ def main():
         mean_loss = jnp.mean(mses)
         net_state, opt_state = average_gpus(net_states, opt_states)
         return mean_loss, net_state, opt_state
-    
+
     for e in range(args.epochs):
-        for pos, (img, lbl) in enumerate(zip(train_batches, train_labels)):
-            lbl = jnp.expand_dims(lbl, -1)
-            mean_loss, net_state, opt_state = central_step(
-                img, lbl, net_state, opt_state, iterations*gpus,
-                model, opt, args.time_steps)
-            if pos % 50 == 0:
-                print(e, pos, mean_loss, len(train_batches))
+        with ThreadPoolExecutor() as executor:
+            load_asinc_dict = {executor.submit(batch_loader_w_dict, path_batch): path_batch
+                            for path_batch in path_batches}
+            for pos, future_train_batches in enumerate(as_completed(load_asinc_dict)):
+                img, lbl = future_train_batches.result()
+                lbl = jnp.expand_dims(lbl, -1)
+                mean_loss, net_state, opt_state = central_step(
+                    img, lbl, net_state, opt_state, iterations*gpus,
+                    model, opt, args.time_steps)
+                if pos % 50 == 0:
+                    print(e, pos, mean_loss, len(load_asinc_dict))
+            
+                iterations += 1
+                writer.write_scalars(iterations, {"loss": mean_loss})
 
-            iterations += 1
-            writer.write_scalars(iterations, {"loss": mean_loss})
-
-        if e % 10 == 0:
-            print('testing...')
-            testing(e, net_state, model, input_shape, writer,
-                    time_steps=args.time_steps, data_dir=args.data_dir)
-            to_storage = (net_state, opt_state, model)
-            os.makedirs('log/checkpoints/', exist_ok=True)
-            with open(f'log/checkpoints/e_{e}_time_{now}.pkl', 'wb') as f:
-                pickle.dump(to_storage, f)
+            if e % 5 == 0:
+                print('testing...')
+                testing(e, net_state, model, input_shape, writer,
+                        time_steps=args.time_steps, test_data=test_data)
+                to_storage = (net_state, opt_state, model)
+                os.makedirs('log/checkpoints/', exist_ok=True)
+                with open(f'log/checkpoints/e_{e}_time_{now}.pkl', 'wb') as f:
+                    pickle.dump(to_storage, f)
 
 
     print('testing...')
-    testing(e, net_state, model, input_shape, writer, time_steps=args.time_steps, data_dir=args.data_dir)
+    testing(e, net_state, model, input_shape, writer, time_steps=args.time_steps, test_data=test_data)
 
 
 if __name__ == '__main__':

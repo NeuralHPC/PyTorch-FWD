@@ -22,13 +22,15 @@ def pad_odd(input_x: jnp.ndarray) -> jnp.ndarray:
 
 
 class UNet(nn.Module):
+    output_channels: int
     transpose_conv = False
     base_feat_no = 64
 
     @nn.compact
     def __call__(self, x_in: Tuple[jnp.ndarray]):
         x, time, label = x_in
-        x_in = jnp.expand_dims(x, -1)
+        # x_in = jnp.expand_dims(x, -1)
+        x_in = x
         init_feat = self.base_feat_no
         time_lbl = time, label
 
@@ -89,5 +91,5 @@ class UNet(nn.Module):
         x9 = x9 + x2
         x10 = up_block(x9, x1, init_feat, time_lbl)  # TODO: Too small??
         y = nn.Conv(
-            features=1, kernel_size=(1, 1), padding="SAME")(x10)
+            features=self.output_channels, kernel_size=(1, 1), padding="SAME")(x10)
         return y
