@@ -48,7 +48,9 @@ def get_freq_order(level: int):
 
 
 def process_images(tensor: jnp.ndarray, paths: list, max_level: int = 3) -> jnp.ndarray:
-    # tensor = jnp.mean(tensor/255., -1)
+    shape = tensor.shape
+    # fold color channel.
+    tensor = jnp.transpose(jnp.reshape(jnp.transpose(tensor, [1, 2, 0, 3]), [shape[1], shape[2], -1]), [-1, 0, 1])
     packets = jwt.packets.WaveletPacket2D(tensor, pywt.Wavelet("Haar"),
         max_level=max_level)
 
@@ -56,8 +58,13 @@ def process_images(tensor: jnp.ndarray, paths: list, max_level: int = 3) -> jnp.
     for node in paths:
         packet_list.append(packets["".join(node)])
     wp_pt = jnp.stack(packet_list, axis=1)
-    # return wp_pt
-    return jnp.log(jnp.abs(wp_pt) + 1e-12)
+    pack_shape = wp_pt.shape
+    # restore color channel
+    wp_pt_rs = jnp.reshape(jnp.transpose(wp_pt, [1,2,3,0]),
+                           [pack_shape[1], pack_shape[2], pack_shape[3], shape[0], shape[3]])
+    wp_pt_rs = jnp.transpose(wp_pt_rs, [-2, 0, 1, 2, 4])
+
+    return jnp.log(jnp.abs(wp_pt_rs) + 1e-12)
 
 
 
@@ -82,16 +89,20 @@ def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
             index = wp_natural_path.index(row_path)
             packet = packet_array[:, index]
             row.append(packet)
-        image.append(np.concatenate(row, -1))
-    return np.concatenate(image, -2)
+        image.append(np.concatenate(row, -2))
+    return np.concatenate(image, -3)
 
 
 if __name__ == '__main__':
     import scipy.datasets
     import matplotlib.pyplot as plt
-    face = jnp.transpose(scipy.datasets.face(), [2, 0, 1])
+    face = jnp.array(scipy.datasets.face())
+    face = jnp.stack([face, face, face, face], axis=0)
     face = face.astype(jnp.float64)/255.
 
     _, natural_path = get_freq_order(level=3)
     packets = process_images(face, natural_path)
     p_image = generate_frequency_packet_image(packets, 3)
+    plt.imshow((p_image[0]/np.max(np.abs(p_image)))/2. + 0.5)
+    plt.show()
+    pass

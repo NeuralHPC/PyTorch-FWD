@@ -232,8 +232,8 @@ def main():
                 iterations += 1
                 writer.write_scalars(iterations, {"loss": mean_loss})
                 pixel_mse_cost, packet_mse_cost = freq_aux
-                writer.write_scalars(iterations, {"pixel_mse_cost": pixel_mse_cost})
-                writer.write_scalars(iterations, {"packet_mse_cost": packet_mse_cost})
+                writer.write_scalars(iterations, {"pixel_mse_cost": jnp.mean(pixel_mse_cost)})
+                writer.write_scalars(iterations, {"packet_mse_cost": jnp.mean(packet_mse_cost)})
 
             if e % 5 == 0:
                 print('testing...')
