@@ -29,7 +29,6 @@ class UNet(nn.Module):
     @nn.compact
     def __call__(self, x_in: Tuple[jnp.ndarray]):
         x, time, label = x_in
-        # x_in = jnp.expand_dims(x, -1)
         x_in = x
         init_feat = self.base_feat_no
         time_lbl = time, label

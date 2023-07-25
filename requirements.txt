@@ -5,3 +5,5 @@ clu
 tensorflow-cpu
 pandas
 multiprocess
+jaxwt
+scipy

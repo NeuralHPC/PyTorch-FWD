@@ -1,7 +1,6 @@
 from typing import Tuple, List, Optional, Dict
 from concurrent.futures import ThreadPoolExecutor
 
-
 from glob import glob
 import argparse
 import jax
@@ -51,11 +50,13 @@ def _parse_args():
         "--distribute", help="TODO: Use for multinode training.", action='store_true'
     )
     parser.add_argument(
-        "--data_dir", required=True, help="Base dataset path"
+        "--data-dir", required=True, help="Base dataset path"
     )
-    
-    
+    parser.add_argument(
+        "--wavelet-loss", help="Use wavelets fix high frequency artifacts.", action='store_true'
+    )
     return parser.parse_args()
+
 
 def get_mnist_test_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     """Return the mnist test data set in numpy arrays.

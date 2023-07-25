@@ -22,16 +22,29 @@ import matplotlib.pyplot as plt
 from src.util import _parse_args, get_batched_celebA_paths, batch_loader, get_label_dict
 from src.networks import UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA
+from src.freq_math import process_images, get_freq_order
 
-
+global_use_wavelet_cost = False
 
 @partial(jax.jit, static_argnames=['model'])
 def diff_step(net_state, x, y, labels, time, model):
     denoise = model.apply(net_state, (x, time, labels))
-    cost = jnp.mean(0.5 * (y - denoise) ** 2)
-    return cost
+    pixel_mse_cost = jnp.mean(0.5 * (y - denoise) ** 2)
 
-diff_step_grad = jax.value_and_grad(diff_step, argnums=0)
+
+    _, nat_order = get_freq_order(3)
+    y_packets = process_images(y, nat_order)
+    net_packets = process_images(denoise, nat_order)
+    packet_mse_cost = jnp.mean(0.5 * (y_packets - net_packets) ** 2)
+
+    if global_use_wavelet_cost:
+        cost_sum = pixel_mse_cost + packet_mse_cost
+    else:
+        cost_sum = pixel_mse_cost
+
+    return cost_sum, (pixel_mse_cost, packet_mse_cost)
+
+diff_step_grad = jax.value_and_grad(diff_step, argnums=0, has_aux=True)
 
 
 def train_step(batch: jnp.ndarray,
@@ -49,8 +62,9 @@ def train_step(batch: jnp.ndarray,
     batch_map = jax.vmap(partial(sample_noise, max_steps=time_steps))
     x, y = batch_map(batch, current_step_array, seed_array)
 
-    mse, grads = diff_step_grad(net_state, x, y, labels,
+    cost_and_aux, grads = diff_step_grad(net_state, x, y, labels,
                                 current_step_array, model)
+    cost_sum, freq_aux = cost_and_aux
 
     updates, opt_state = opt.update(grads, opt_state, net_state)
     net_state = optax.apply_updates(net_state, updates)
@@ -73,7 +87,7 @@ def train_step(batch: jnp.ndarray,
     # mses2, grads = time_rec_map(map_tree=map_tree)
     # net_state, opt_state = update(net_state, opt_state, grads)
     # mse = jnp.mean(jnp.concatenate([mses, mses2]))
-    return mse, net_state, opt_state
+    return cost_sum, net_state, opt_state, freq_aux
 
 
 def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
@@ -130,6 +144,9 @@ def main():
     args = _parse_args()
     print(args)
     
+    global global_use_wavelet_cost
+    global_use_wavelet_cost = args.wavelet_loss
+
     now = datetime.datetime.now()
     
     writer = metric_writers.create_default_writer(args.logdir + f"/{now}")
@@ -191,13 +208,13 @@ def main():
         pmap_train_step = jax.pmap(
              partial_train_step, devices=jax.devices()[:gpus]
         )
-        mses, net_states, opt_states = pmap_train_step(
+        mses, net_states, opt_states, freq_aux = pmap_train_step(
             batch=img_norm, labels=lbl,
             seed=jnp.expand_dims(jnp.array(seed)+jnp.arange(gpus), -1)
             )
         mean_loss = jnp.mean(mses)
         net_state, opt_state = average_gpus(net_states, opt_states)
-        return mean_loss, net_state, opt_state
+        return mean_loss, net_state, opt_state, freq_aux
 
     for e in range(args.epochs):
         with ThreadPoolExecutor() as executor:
@@ -206,7 +223,7 @@ def main():
             for pos, future_train_batches in enumerate(as_completed(load_asinc_dict)):
                 img, lbl = future_train_batches.result()
                 lbl = jnp.expand_dims(lbl, -1)
-                mean_loss, net_state, opt_state = central_step(
+                mean_loss, net_state, opt_state, freq_aux = central_step(
                     img, lbl, net_state, opt_state, iterations*gpus,
                     model, opt, args.time_steps)
                 if pos % 50 == 0:
@@ -214,6 +231,9 @@ def main():
             
                 iterations += 1
                 writer.write_scalars(iterations, {"loss": mean_loss})
+                pixel_mse_cost, packet_mse_cost = freq_aux
+                writer.write_scalars(iterations, {"pixel_mse_cost": pixel_mse_cost})
+                writer.write_scalars(iterations, {"packet_mse_cost": packet_mse_cost})
 
             if e % 5 == 0:
                 print('testing...')
