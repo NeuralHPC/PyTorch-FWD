@@ -149,6 +149,10 @@ def main():
 
     now = datetime.datetime.now()
     
+    # create the logdir if it does not exist already.
+    if not os.path.exists(args.logdir):
+        os.makedirs(args.logdir)
+
     writer = metric_writers.create_default_writer(args.logdir + f"/{now}")
 
     np.random.seed(args.seed)
