@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from src.freq_math import (
     get_freq_order,
     generate_frequency_packet_image,
-    process_images,
+    forward_wavelet_packet_transform,
     inverse_wavelet_packet_transform
 )
 
@@ -17,8 +17,8 @@ def test_loss():
     face = jnp.stack([face, face, face, face], axis=0)
     face = face.astype(jnp.float64)/255.
 
-    _, natural_path = get_freq_order(level=3)
-    packets = process_images(face, natural_path, wavelet="Haar")
+    packets = forward_wavelet_packet_transform(
+        face, wavelet="Haar", max_level=3)
     p_image = generate_frequency_packet_image(packets, 3)
     assert p_image.shape == (4, 768, 1024, 3)
 
@@ -27,8 +27,8 @@ def test_inverse_wp():
     face = jnp.stack([face, face, face, face], axis=0)
     face = face.astype(jnp.float64)/255.
     
-    natural_path = list(product(["a", "h", "v", "d"], repeat=3))
-    packets = process_images(face, natural_path, max_level = 3, wavelet = "db3")
+    packets = forward_wavelet_packet_transform(
+        face, max_level = 3, wavelet = "db3")
 
     reconstruction = inverse_wavelet_packet_transform(packets, max_level=3, wavelet="db3")
 

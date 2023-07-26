@@ -1,8 +1,6 @@
 import datetime
 import pickle
-from typing import List, Dict
 from functools import partial
-from multiprocess import Pool
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 
@@ -10,39 +8,37 @@ from clu import metric_writers
 
 import jax
 import jax.numpy as jnp
-# jax.config.update('jax_threefry_partitionable', True)
 
 import optax
 import flax.linen as nn
 from flax.core.frozen_dict import FrozenDict
 
 import numpy as np
-import matplotlib.pyplot as plt
 
-from src.util import _parse_args, get_batched_celebA_paths, batch_loader, get_label_dict
+from src.util import _parse_args, get_batched_celebA_paths, batch_loader
 from src.networks import UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA
-from src.freq_math import process_images, get_freq_order
+from src.freq_math import forward_wavelet_packet_transform, get_freq_order
 
 global_use_wavelet_cost = False
+global_use_fourier_cost = False
 
 @partial(jax.jit, static_argnames=['model'])
 def diff_step(net_state, x, y, labels, time, model):
     denoise = model.apply(net_state, (x, time, labels))
     pixel_mse_cost = jnp.mean(0.5 * (y - denoise) ** 2)
 
-
     _, nat_order = get_freq_order(3)
-    y_packets = process_images(y, nat_order)
-    net_packets = process_images(denoise, nat_order)
+    y_packets = forward_wavelet_packet_transform(y, nat_order)
+    net_packets = forward_wavelet_packet_transform(denoise, nat_order)
     packet_mse_cost = jnp.mean(0.5 * (y_packets - net_packets) ** 2)
 
     if global_use_wavelet_cost:
-        cost_sum = packet_mse_cost
+        cost = packet_mse_cost
     else:
-        cost_sum = pixel_mse_cost
+        cost = pixel_mse_cost
 
-    return cost_sum, (pixel_mse_cost, packet_mse_cost)
+    return cost, (pixel_mse_cost, packet_mse_cost)
 
 diff_step_grad = jax.value_and_grad(diff_step, argnums=0, has_aux=True)
 
@@ -54,7 +50,6 @@ def train_step(batch: jnp.ndarray,
                opt: optax.GradientTransformation,
                time_steps: int):
     key = jax.random.PRNGKey(seed[0])
-    
     current_step_array = jax.random.randint(
         key, shape=[batch.shape[0]], minval=1, maxval=time_steps)
     current_step_array = jnp.expand_dims(current_step_array, -1)
@@ -64,7 +59,7 @@ def train_step(batch: jnp.ndarray,
 
     cost_and_aux, grads = diff_step_grad(net_state, x, y, labels,
                                 current_step_array, model)
-    cost_sum, freq_aux = cost_and_aux
+    cost, freq_aux = cost_and_aux
 
     updates, opt_state = opt.update(grads, opt_state, net_state)
     net_state = optax.apply_updates(net_state, updates)
@@ -87,7 +82,7 @@ def train_step(batch: jnp.ndarray,
     # mses2, grads = time_rec_map(map_tree=map_tree)
     # net_state, opt_state = update(net_state, opt_state, grads)
     # mse = jnp.mean(jnp.concatenate([mses, mses2]))
-    return cost_sum, net_state, opt_state, freq_aux
+    return cost, net_state, opt_state, freq_aux
 
 
 def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
@@ -179,7 +174,7 @@ def main():
     test_data = (imgs[:5], labels[:5])
 
 
-    model = UNet(output_channels=input_shape[-1])
+    model = UNet(output_channels=input_shape[-1], wavelet_packets=True)
     opt = optax.adam(0.001)
     # create the model state
     net_state = model.init(key, 
@@ -213,13 +208,13 @@ def main():
         pmap_train_step = jax.pmap(
              partial_train_step, devices=jax.devices()[:gpus]
         )
-        mses, net_states, opt_states, freq_aux = pmap_train_step(
+        cost, net_states, opt_states, freq_aux = pmap_train_step(
             batch=img_norm, labels=lbl,
             seed=jnp.expand_dims(jnp.array(seed)+jnp.arange(gpus), -1)
             )
-        mean_loss = jnp.mean(mses)
+        mean_cost = jnp.mean(cost)
         net_state, opt_state = average_gpus(net_states, opt_states)
-        return mean_loss, net_state, opt_state, freq_aux
+        return mean_cost, net_state, opt_state, freq_aux
 
     for e in range(args.epochs):
         with ThreadPoolExecutor() as executor:
@@ -248,7 +243,6 @@ def main():
                 os.makedirs('log/checkpoints/', exist_ok=True)
                 with open(f'log/checkpoints/e_{e}_time_{now}.pkl', 'wb') as f:
                     pickle.dump(to_storage, f)
-
 
     print('testing...')
     testing(e, net_state, model, input_shape, writer, time_steps=args.time_steps, test_data=test_data)

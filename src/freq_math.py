@@ -75,20 +75,22 @@ def unfold_channels(array: jnp.ndarray, original_shape: Tuple[int, int, int, int
     """
      
     bc_shape = array.shape
-    array_rs = jnp.reshape(jnp.transpose(array, [1,2,3,0]),
+    array_rs = jnp.reshape(jnp.transpose(array, [1, 2, 3, 0]),
                            [bc_shape[1], bc_shape[2], bc_shape[3],
                             original_shape[0], original_shape[3]])
     return jnp.transpose(array_rs, [-2, 0, 1, 2, 4])
 
 
-def process_images(tensor: jnp.ndarray, paths: list, max_level: int = 3, wavelet: str = "db3",
-                   log_scale=False) -> jnp.ndarray:
+def forward_wavelet_packet_transform(
+        tensor: jnp.ndarray, wavelet: str = "db3", max_level: int = 3,
+        log_scale=False) -> jnp.ndarray:
     shape = tensor.shape
     # fold color channel.
     tensor = fold_channels(tensor)
     packets = jwt.packets.WaveletPacket2D(tensor, pywt.Wavelet(wavelet),
         max_level=max_level)
 
+    paths = list(product(["a", "h", "v", "d"], repeat=max_level))
     packet_list = []
     for node in paths:
         packet_list.append(packets["".join(node)])

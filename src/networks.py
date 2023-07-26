@@ -7,6 +7,13 @@ import jax.numpy as jnp
 import flax.linen as nn
 
 
+from src.freq_math import (
+    forward_wavelet_packet_transform,
+    inverse_wavelet_packet_transform
+)
+
+
+
 @jax.jit
 def pad_odd(input_x: jnp.ndarray) -> jnp.ndarray:
     # dont pad the batch axis.
@@ -24,15 +31,25 @@ def pad_odd(input_x: jnp.ndarray) -> jnp.ndarray:
 class UNet(nn.Module):
     output_channels: int
     transpose_conv = False
-    base_feat_no = 64
+    wavelet_packets: int = False
+    base_feat_no = 64 # TODO!
 
     @nn.compact
     def __call__(self, x_in: Tuple[jnp.ndarray]):
         x, time, label = x_in
+        out_shape = x.shape
         x_in = x
         init_feat = self.base_feat_no
         time_lbl = time, label
 
+        # TODO: add packets.
+        if self.wavelet_packets:
+            x_in = forward_wavelet_packet_transform(x_in, "db3", 2)
+            # N, P, H, W, C to N, H, W, C*P
+            pk_shape = x_in.shape
+            x_in = np.transpose(x_in, [0, 2, 3, 4, 1])
+            x_in = np.reshape(
+                x_in, [pk_shape[0], pk_shape[2], pk_shape[3], pk_shape[4]*pk_shape[1]])
 
         x1 = nn.relu(nn.Conv(
                      features=init_feat, kernel_size=(3, 3), padding="SAME")(x_in))
@@ -89,6 +106,14 @@ class UNet(nn.Module):
         x9 = up_block(x8, x2, init_feat, time_lbl)
         x9 = x9 + x2
         x10 = up_block(x9, x1, init_feat, time_lbl)  # TODO: Too small??
-        y = nn.Conv(
-            features=self.output_channels, kernel_size=(1, 1), padding="SAME")(x10)
-        return y
+
+
+        if self.wavelet_packets:
+            y = nn.Conv(
+                features= pk_shape[4]*pk_shape[1], kernel_size=(3, 3), padding="SAME")(x10)
+            y = np.reshape(y, pk_shape)
+            y = inverse_wavelet_packet_transform(y, "db3", 2)
+        else:
+            y = nn.Conv(
+                features=self.output_channels, kernel_size=(1, 1), padding="SAME")(x10)
+        return y[:out_shape[0], :out_shape[1], :out_shape[2], :out_shape[3]]

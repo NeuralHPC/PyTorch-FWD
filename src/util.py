@@ -12,8 +12,6 @@ import matplotlib.animation as manimation
 import pandas as pd
 import os
 
-
-
 from PIL import Image
 
 def _parse_args():
@@ -38,7 +36,7 @@ def _parse_args():
         "--seed", type=int, default=42, help="initial seed value (default:42)"
     )
     parser.add_argument(
-        "--time-steps", type=int, default=50, help="steps per diffusion"
+        "--time-steps", type=int, default=40, help="steps per diffusion"
     )
     parser.add_argument(
         "--gpus", type=int, default=-1, help="set gpu no by hand. Use all if -1 (default)."
@@ -146,7 +144,7 @@ def batch_loader(batch_array: np.ndarray, labels_dict: Dict[str, int],
 
     def load(path: str) -> np.ndarray:
         img = Image.open(path)
-        img = img.resize(resize, Image.Resampling.LANCZOS)
+        # img = img.resize(resize, Image.Resampling.LANCZOS)
         return img
 
     def label(path: str) -> np.ndarray:
