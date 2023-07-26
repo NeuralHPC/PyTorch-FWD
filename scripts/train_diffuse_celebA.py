@@ -174,7 +174,7 @@ def main():
     test_data = (imgs[:5], labels[:5])
 
 
-    model = UNet(output_channels=input_shape[-1], wavelet_packets=True)
+    model = UNet(output_channels=input_shape[-1], wavelet_packets=False)
     opt = optax.adam(0.001)
     # create the model state
     net_state = model.init(key, 

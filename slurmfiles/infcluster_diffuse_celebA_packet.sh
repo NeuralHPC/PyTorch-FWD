@@ -2,8 +2,8 @@
 
 #SBATCH --gres=gpu:2
 #SBATCH --job-name=ca_diff_w
-#SBATCH --output=out/diff_train-%j.out
-#SBATCH --error=out/diff_train-%j.err
+#SBATCH --output=out/diff_train_cap-%j.out
+#SBATCH --error=out/diff_train_cap-%j.err
 #SBATCH --time=24:00:00
 
 source ~/.bashrc
