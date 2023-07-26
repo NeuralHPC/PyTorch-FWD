@@ -28,9 +28,8 @@ def diff_step(net_state, x, y, labels, time, model):
     denoise = model.apply(net_state, (x, time, labels))
     pixel_mse_cost = jnp.mean(0.5 * (y - denoise) ** 2)
 
-    _, nat_order = get_freq_order(3)
-    y_packets = forward_wavelet_packet_transform(y, nat_order)
-    net_packets = forward_wavelet_packet_transform(denoise, nat_order)
+    y_packets = forward_wavelet_packet_transform(y)
+    net_packets = forward_wavelet_packet_transform(denoise)
     packet_mse_cost = jnp.mean(0.5 * (y_packets - net_packets) ** 2)
 
     if global_use_wavelet_cost:
@@ -130,6 +129,7 @@ def average_gpus(net_states: FrozenDict,
                             net_states)
     mean_opt_state = jax.tree_map(partial(jnp.mean, axis=0),
                                 opt_states)
+    # TODO: ok??
     opt_state = jax.tree_map(lambda t, r: t.astype(r.dtype),
                              mean_opt_state,  opt_states)
     return net_state, opt_state
@@ -217,7 +217,7 @@ def main():
         return mean_cost, net_state, opt_state, freq_aux
 
     for e in range(args.epochs):
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
             load_asinc_dict = {executor.submit(batch_loader_w_dict, path_batch): path_batch
                             for path_batch in path_batches}
             for pos, future_train_batches in enumerate(as_completed(load_asinc_dict)):

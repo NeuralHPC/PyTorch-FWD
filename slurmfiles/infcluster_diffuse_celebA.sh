@@ -11,4 +11,4 @@ conda activate jax
 which python
 pip install -r requirements.txt
 
-PYTHONPATH=. python scripts/train_diffuse_celebA.py --batch-size 100 --seed 22 --epochs 200 --data-dir ./data/celebA
+PYTHONPATH=. python scripts/train_diffuse_celebA.py --batch-size 100 --seed 22 --epochs 600 --data-dir ./data/celebA

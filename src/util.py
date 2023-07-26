@@ -24,6 +24,12 @@ def _parse_args():
         help="input batch size for testing (default: 50)",
     )
     parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=16,
+        help="the number of data loading workers.",
+    )
+    parser.add_argument(
         "--learning-rate",
         type=float,
         default=1e-3,
@@ -139,12 +145,12 @@ def get_label_dict(path: str) -> Dict[str, int]:
 
 
 def batch_loader(batch_array: np.ndarray, labels_dict: Dict[str, int],
-                 resize: Tuple[int, int] = (64, 64)) -> np.ndarray:
+                 resize: Tuple[int, int] = (128, 128)) -> np.ndarray:
     # load a single image batch into memory.
 
     def load(path: str) -> np.ndarray:
         img = Image.open(path)
-        # img = img.resize(resize, Image.Resampling.LANCZOS)
+        img = img.resize(resize, Image.Resampling.LANCZOS)
         return img
 
     def label(path: str) -> np.ndarray:
