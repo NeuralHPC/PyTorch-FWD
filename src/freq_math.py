@@ -1,9 +1,12 @@
+from typing import Tuple
+
 from itertools import product
 
 import pywt
 import jaxwt as jwt
 import jax.numpy as jnp
 import numpy as np
+import scipy
 
 def get_freq_order(level: int):
     """Get the frequency order for a given packet decomposition level.
@@ -47,25 +50,57 @@ def get_freq_order(level: int):
     return wp_frequency_path, wp_natural_path
 
 
-def process_images(tensor: jnp.ndarray, paths: list, max_level: int = 3) -> jnp.ndarray:
+def fold_channels(array: jnp.ndarray) -> jnp.ndarray:
+    """Fold a trailing (color-) channel into the batch dimension.
+
+    Args:
+        array (jnp.ndarray): An array of shape [B, H, W, C]
+
+    Returns:
+        jnp.ndarray: The folded [B*C, H, W] image.
+    """    
+    shape = array.shape
+    # fold color channel.
+    return jnp.transpose(jnp.reshape(
+        jnp.transpose(array, [1, 2, 0, 3]), [shape[1], shape[2], -1]), [-1, 0, 1])
+
+def unfold_channels(array: jnp.ndarray, original_shape: Tuple[int, int, int, int]) -> jnp.ndarray:
+    """Restore channels from the leading batch-dimension.
+
+    Args:
+        array (jnp.ndarray): An [B*C, packets, H, W] input array. 
+
+    Returns:
+        jnp.ndarray: Output of shape [B, H, W, C]
+    """
+     
+    bc_shape = array.shape
+    array_rs = jnp.reshape(jnp.transpose(array, [1,2,3,0]),
+                           [bc_shape[1], bc_shape[2], bc_shape[3],
+                            original_shape[0], original_shape[3]])
+    return jnp.transpose(array_rs, [-2, 0, 1, 2, 4])
+
+
+def process_images(tensor: jnp.ndarray, paths: list, max_level: int = 3, wavelet: str = "db3",
+                   log_scale=False) -> jnp.ndarray:
     shape = tensor.shape
     # fold color channel.
-    tensor = jnp.transpose(jnp.reshape(jnp.transpose(tensor, [1, 2, 0, 3]), [shape[1], shape[2], -1]), [-1, 0, 1])
-    packets = jwt.packets.WaveletPacket2D(tensor, pywt.Wavelet("Haar"),
+    tensor = fold_channels(tensor)
+    packets = jwt.packets.WaveletPacket2D(tensor, pywt.Wavelet(wavelet),
         max_level=max_level)
 
     packet_list = []
     for node in paths:
         packet_list.append(packets["".join(node)])
     wp_pt = jnp.stack(packet_list, axis=1)
-    pack_shape = wp_pt.shape
+
     # restore color channel
-    wp_pt_rs = jnp.reshape(jnp.transpose(wp_pt, [1,2,3,0]),
-                           [pack_shape[1], pack_shape[2], pack_shape[3], shape[0], shape[3]])
-    wp_pt_rs = jnp.transpose(wp_pt_rs, [-2, 0, 1, 2, 4])
+    wp_pt_rs = unfold_channels(wp_pt, shape)
 
-    return jnp.log(jnp.abs(wp_pt_rs) + 1e-12)
+    if log_scale:
+        wp_pt_rs = jnp.log(jnp.abs(wp_pt_rs) + 1e-12)
 
+    return wp_pt_rs
 
 
 def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
@@ -93,16 +128,28 @@ def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
     return np.concatenate(image, -3)
 
 
-if __name__ == '__main__':
-    import scipy.datasets
-    import matplotlib.pyplot as plt
-    face = jnp.array(scipy.datasets.face())
-    face = jnp.stack([face, face, face, face], axis=0)
-    face = face.astype(jnp.float64)/255.
+def inverse_wavelet_packet_transform(packet_array: jnp.array, wavelet: str, max_level: int):
+    batch = packet_array.shape[0]
+    channel = packet_array.shape[-1]
 
-    _, natural_path = get_freq_order(level=3)
-    packets = process_images(face, natural_path)
-    p_image = generate_frequency_packet_image(packets, 3)
-    plt.imshow((p_image[0]/np.max(np.abs(p_image)))/2. + 0.5)
-    plt.show()
-    pass
+    def get_node_order(level):
+        wp_natural_path = list(product(["a", "h", "v", "d"], repeat=level))
+        return ["".join(p) for p in wp_natural_path]
+
+    wp_dict = {}
+    for pos, path in enumerate(get_node_order(max_level)):
+        wp_dict[path] = packet_array[:, pos, :, :, :]
+
+    for level in reversed(range(max_level)):
+        for node in get_node_order(level):
+            data_a = fold_channels(wp_dict[node + "a"])
+            data_h = fold_channels(wp_dict[node + "h"])
+            data_v = fold_channels(wp_dict[node + "v"])
+            data_d = fold_channels(wp_dict[node + "d"])
+            rec = jwt.waverec2([data_a, (data_h, data_v, data_d)], pywt.Wavelet(wavelet))
+            height = rec.shape[1]
+            width = rec.shape[2]
+            rec = unfold_channels(np.expand_dims(rec, 1), [batch, height, width, channel])
+            rec = np.squeeze(rec, 1)
+            wp_dict[node] = rec
+    return rec

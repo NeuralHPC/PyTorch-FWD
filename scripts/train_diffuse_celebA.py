@@ -38,7 +38,7 @@ def diff_step(net_state, x, y, labels, time, model):
     packet_mse_cost = jnp.mean(0.5 * (y_packets - net_packets) ** 2)
 
     if global_use_wavelet_cost:
-        cost_sum = pixel_mse_cost + packet_mse_cost
+        cost_sum = packet_mse_cost
     else:
         cost_sum = pixel_mse_cost
 
@@ -141,6 +141,7 @@ def average_gpus(net_states: FrozenDict,
 
 
 def main():
+    print("Running diffusion training on celebA.") 
     args = _parse_args()
     print(args)
     
