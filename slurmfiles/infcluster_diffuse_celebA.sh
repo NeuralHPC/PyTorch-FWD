@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:4
 #SBATCH --job-name=ca_diff_pix
 #SBATCH --output=out/diff_train_ca-%j.out
 #SBATCH --error=out/diff_train_ca-%j.err

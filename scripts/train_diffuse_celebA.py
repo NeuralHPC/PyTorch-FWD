@@ -8,8 +8,8 @@ from clu import metric_writers
 
 import jax
 import jax.numpy as jnp
-
 import optax
+import flax
 import flax.linen as nn
 from flax.core.frozen_dict import FrozenDict
 
@@ -62,25 +62,6 @@ def train_step(batch: jnp.ndarray,
 
     updates, opt_state = opt.update(grads, opt_state, net_state)
     net_state = optax.apply_updates(net_state, updates)
-
-    # recurrent diffusion update
-    # time_apply = jax.vmap(partial(model.apply, variables=net_state))
-    # key = jax.random.split(key, 1)[0]
-    # # rec_steps = 1
-    # rec_x = x_array
-    # # for _ in range(rec_steps):
-    # rec_x = time_apply(x_in=(rec_x, time, labels))[..., 0]
-    # 
-    # map_tree = (rec_x[1:],
-    #             #y_array[:-rec_steps],
-    #             y_array[:-1],
-    #             time[:-1],
-    #             labels[:-1])
-    # time_rec_map = jax.vmap(
-    #         partial(reconstruct, net_state=net_state, model=model))
-    # mses2, grads = time_rec_map(map_tree=map_tree)
-    # net_state, opt_state = update(net_state, opt_state, grads)
-    # mse = jnp.mean(jnp.concatenate([mses, mses2]))
     return cost, net_state, opt_state, freq_aux
 
 
@@ -120,20 +101,6 @@ def norm_and_split(img: jnp.ndarray,
     lbls = jnp.stack(jnp.split(lbl, gpus))
     print(f"input shape: {img_norm.shape}")
     return img_norm, lbls
-
-
-@jax.jit
-def average_gpus(net_states: FrozenDict, 
-                 opt_states: FrozenDict):
-    net_state = jax.tree_map(partial(jnp.mean, axis=0),
-                            net_states)
-    mean_opt_state = jax.tree_map(partial(jnp.mean, axis=0),
-                                opt_states)
-    # TODO: ok??
-    opt_state = jax.tree_map(lambda t, r: t.astype(r.dtype),
-                             mean_opt_state,  opt_states)
-    return net_state, opt_state
-
 
 def main():
     print("Running diffusion training on celebA.") 
@@ -181,7 +148,9 @@ def main():
             (jnp.ones([batch_size] + input_shape),
              jnp.expand_dims(jnp.ones([batch_size]), -1),
              jnp.expand_dims(jnp.ones([batch_size]), -1)))
-    opt_state = opt.init(net_state)
+    # use a opt state per device.
+    opt_state = flax.jax_utils.replicate(opt.init(net_state),
+                                         devices=jax.devices()[:gpus])
     iterations = 0
 
     @partial(jax.jit, static_argnames= ['model', 'opt', 'time_steps'])
@@ -197,8 +166,8 @@ def main():
         img = jnp.array(img)
         img_norm, lbl = norm_and_split(img, lbl, gpus)
         partial_train_step = partial(train_step,
-        net_state=net_state, opt_state=opt_state,                          
-        model=model, opt=opt, time_steps=time_steps)
+        net_state=net_state, model=model, opt=opt,
+        time_steps=time_steps)
         # debug without jit
         # if 1:
         #     res = list(map(partial(
@@ -209,12 +178,13 @@ def main():
              partial_train_step, devices=jax.devices()[:gpus]
         )
         cost, net_states, opt_states, freq_aux = pmap_train_step(
-            batch=img_norm, labels=lbl,
+            batch=img_norm, labels=lbl, opt_state=opt_state,
             seed=jnp.expand_dims(jnp.array(seed)+jnp.arange(gpus), -1)
             )
         mean_cost = jnp.mean(cost)
-        net_state, opt_state = average_gpus(net_states, opt_states)
-        return mean_cost, net_state, opt_state, freq_aux
+        net_state = jax.tree_map(partial(jnp.mean, axis=0),
+                            net_states)
+        return mean_cost, net_state, opt_states, freq_aux
 
     for e in range(args.epochs):
         with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
