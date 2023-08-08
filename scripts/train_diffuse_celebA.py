@@ -52,9 +52,6 @@ def train_step(batch: jnp.ndarray,
     mse, grads = diff_step_grad(net_state, x, y, labels,
                                 current_step_array, model)
 
-    updates, opt_state = opt.update(grads, opt_state, net_state)
-    net_state = optax.apply_updates(net_state, updates)
-
     # recurrent diffusion update
     # time_apply = jax.vmap(partial(model.apply, variables=net_state))
     # key = jax.random.split(key, 1)[0]
@@ -73,7 +70,7 @@ def train_step(batch: jnp.ndarray,
     # mses2, grads = time_rec_map(map_tree=map_tree)
     # net_state, opt_state = update(net_state, opt_state, grads)
     # mse = jnp.mean(jnp.concatenate([mses, mses2]))
-    return mse, net_state, opt_state
+    return mse, grads
 
 
 def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
@@ -191,12 +188,14 @@ def main():
         pmap_train_step = jax.pmap(
              partial_train_step, devices=jax.devices()[:gpus]
         )
-        mses, net_states, opt_states = pmap_train_step(
+        mses, multi_grads = pmap_train_step(
             batch=img_norm, labels=lbl,
             seed=jnp.expand_dims(jnp.array(seed)+jnp.arange(gpus), -1)
             )
         mean_loss = jnp.mean(mses)
-        net_state, opt_state = average_gpus(net_states, opt_states)
+        grads = jax.tree_map(lambda g: jnp.sum(g), multi_grads)
+        updates, opt_state = opt.update(grads, opt_state, net_state)
+        net_state = optax.apply_updates(net_state, updates)
         return mean_loss, net_state, opt_state
 
     for e in range(args.epochs):
