@@ -91,17 +91,6 @@ def norm_and_split(img: jnp.ndarray,
     return img_norm, lbls
 
 
-@jax.jit
-def average_gpus(net_states: FrozenDict, 
-                 opt_states: FrozenDict):
-    net_state = jax.tree_map(partial(jnp.mean, axis=0),
-                            net_states)
-    mean_opt_state = jax.tree_map(partial(jnp.mean, axis=0),
-                                opt_states)
-    opt_state = jax.tree_map(lambda t, r: t.astype(r.dtype),
-                             mean_opt_state,  opt_states)
-    return net_state, opt_state
-
 
 def main():
     args = _parse_args()
