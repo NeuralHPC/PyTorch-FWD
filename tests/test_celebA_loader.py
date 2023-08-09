@@ -5,13 +5,13 @@ import tqdm
 
 
 import time
-from src.util import get_batched_celebA_paths, batch_loader, get_label_dict
+from src.util import get_batched_celebA_paths, batch_loader
 
 def test_celebA_loader():
-    labels_dict = get_label_dict('/home/wolter/uni/diffusion/data/celebA/CelebA/Anno/identity_CelebA.txt')
-    path_batches = get_batched_celebA_paths(64)
+    root_path = '/home/lveerama/HPCA/CelebA-HQ/data128x128'
+    path_batches, labels_dict = get_batched_celebA_paths(root_path, 64)
     start = time.perf_counter()
-    image_batch, image_labels = batch_loader(path_batches[0], labels_dict)
+    image_batch, image_labels = batch_loader(path_batches[0], labels_dict, (64, 64))
     end = time.perf_counter()
     print(end - start)
     assert image_batch.shape == (65, 64, 64, 3)
@@ -19,12 +19,12 @@ def test_celebA_loader():
 
 
 def test_multibatch_loader():
-    labels_dict = get_label_dict('/home/wolter/uni/diffusion/data/celebA/CelebA/Anno/identity_CelebA.txt')
-    path_batches = get_batched_celebA_paths(1000)
+    root_path = '/home/lveerama/HPCA/CelebA-HQ/data128x128'
+    path_batches, labels_dict = get_batched_celebA_paths(root_path, 1000)
     epoch_start = time.perf_counter()
     total = len(path_batches)
     # We can use a with statement to ensure threads are cleaned up promptly
-    batch_loader_w_dict = partial(batch_loader, labels_dict=labels_dict)
+    batch_loader_w_dict = partial(batch_loader, labels_dict=labels_dict, resize=(64, 64))
     with ThreadPoolExecutor() as executor:
         load_asinc_dict = {executor.submit(batch_loader_w_dict, path_batch): path_batch
                          for path_batch in path_batches}
@@ -37,4 +37,4 @@ def test_multibatch_loader():
     epoch_end = time.perf_counter()
     print("total time spent loading in epoch", epoch_end - epoch_start, "[s]", (epoch_end - epoch_start)/60., "[min]" )
     print((epoch_end - epoch_start)/len(path_batches), 'seconds per batch')
-    assert data[0] == (1000, 64, 64, 3)
+    assert data[0].shape == (1000, 64, 64, 3)
