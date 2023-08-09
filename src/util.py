@@ -49,6 +49,9 @@ def _parse_args():
     parser.add_argument(
         "--data-dir", required=True, help="Base dataset path"
     )
+    parser.add_argument(
+        "--resize", type=int, default=None, help="Resize the input image"
+    )
     return parser.parse_args()
 
 
