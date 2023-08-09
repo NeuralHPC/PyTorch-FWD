@@ -36,9 +36,8 @@ diff_step_grad = jax.value_and_grad(diff_step, argnums=0)
 
 def train_step(batch: jnp.ndarray,
                labels: jnp.ndarray,
-               net_state: FrozenDict, opt_state: FrozenDict,
+               net_state: FrozenDict,
                seed: int, model: nn.Module,
-               opt: optax.GradientTransformation,
                time_steps: int):
     key = jax.random.PRNGKey(seed[0])
     
@@ -51,25 +50,6 @@ def train_step(batch: jnp.ndarray,
 
     mse, grads = diff_step_grad(net_state, x, y, labels,
                                 current_step_array, model)
-
-    # recurrent diffusion update
-    # time_apply = jax.vmap(partial(model.apply, variables=net_state))
-    # key = jax.random.split(key, 1)[0]
-    # # rec_steps = 1
-    # rec_x = x_array
-    # # for _ in range(rec_steps):
-    # rec_x = time_apply(x_in=(rec_x, time, labels))[..., 0]
-    # 
-    # map_tree = (rec_x[1:],
-    #             #y_array[:-rec_steps],
-    #             y_array[:-1],
-    #             time[:-1],
-    #             labels[:-1])
-    # time_rec_map = jax.vmap(
-    #         partial(reconstruct, net_state=net_state, model=model))
-    # mses2, grads = time_rec_map(map_tree=map_tree)
-    # net_state, opt_state = update(net_state, opt_state, grads)
-    # mse = jnp.mean(jnp.concatenate([mses, mses2]))
     return mse, grads
 
 
@@ -177,14 +157,7 @@ def main():
         img = jnp.array(img)
         img_norm, lbl = norm_and_split(img, lbl, gpus)
         partial_train_step = partial(train_step,
-        net_state=net_state, opt_state=opt_state,                          
-        model=model, opt=opt, time_steps=time_steps)
-        # debug without jit
-        # if 1:
-        #     res = list(map(partial(
-        #         partial_train_step,
-        #         seed=jnp.array(args.seed)+jnp.arange(gpus)),
-        #         img_norm))
+        net_state=net_state, model=model, time_steps=time_steps)
         pmap_train_step = jax.pmap(
              partial_train_step, devices=jax.devices()[:gpus]
         )
@@ -193,7 +166,7 @@ def main():
             seed=jnp.expand_dims(jnp.array(seed)+jnp.arange(gpus), -1)
             )
         mean_loss = jnp.mean(mses)
-        grads = jax.tree_map(lambda g: jnp.sum(g), multi_grads)
+        grads = jax.tree_map(partial(jnp.mean, axis=0), multi_grads) # Average the gradients
         updates, opt_state = opt.update(grads, opt_state, net_state)
         net_state = optax.apply_updates(net_state, updates)
         return mean_loss, net_state, opt_state
