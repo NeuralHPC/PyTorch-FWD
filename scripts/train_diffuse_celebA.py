@@ -19,7 +19,7 @@ from flax.core.frozen_dict import FrozenDict
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.util import _parse_args, get_batched_celebA_paths, batch_loader, get_label_dict
+from src.util import _parse_args, get_batched_celebA_paths, batch_loader
 from src.networks import UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA
 
@@ -110,16 +110,20 @@ def main():
 
     path_batches, labels_dict = get_batched_celebA_paths(args.data_dir, batch_size)
 
+    resize=None
+    if args.resize:
+        resize = (args.resize, args.resize)
+
     print("Data loaded. Starting to train.")
-    dummy_img_batch, _ = batch_loader(path_batches[0], labels_dict)
+    dummy_img_batch, _ = batch_loader(path_batches[0], labels_dict, resize)
     input_shape = list(dummy_img_batch[0].shape)
     print(f"Total {len(path_batches)} number of batches")
-    batch_loader_w_dict = partial(batch_loader, labels_dict=labels_dict)
+    batch_loader_w_dict = partial(batch_loader, labels_dict=labels_dict, resize=resize)
     print(f"Input shape: {input_shape}")
 
     # Load test data images
-    test_patches, _ = get_batched_celebA_paths(args.data_dir, split='validation')
-    imgs, labels = batch_loader(test_patches[0], labels_dict)
+    test_patches, _ = get_batched_celebA_paths(args.data_dir)
+    imgs, labels = batch_loader(test_patches[0], labels_dict, resize)
     test_data = (imgs[:5], labels[:5])
 
 
