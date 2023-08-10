@@ -19,3 +19,14 @@ Diffusion on CelebAHQ
 ```
 PYTHONPATH=. python scripts/train_diffuse_celebA.py --batch-size 10 --seed 42 --epochs 200 --data-dir <path to data>
 ```
+Sampling on CelebAHQ
+```
+PYTHONPATH=. python scripts/sample_diffuse_celebA.py --ckpt-path <checkpoint_path> --input-shape <64>
+```
+for input_shape argument please provide either height or width of the image. Currently only supports square images.<br>
+if no seed was given, a random seed is selected. To provide seed use ```--args.seed <seed>```.<br>
+Add ```--gif``` to the above command for visualizing the diffusion steps of one random label.
+
+Computing the FID
+```
+```

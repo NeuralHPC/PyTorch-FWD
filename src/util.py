@@ -55,6 +55,42 @@ def _parse_args():
     return parser.parse_args()
 
 
+def _sampler_args():
+    parser = argparse.ArgumentParser(
+    prog="Image sampler",
+    description="Sample Images from the diffusion model"
+    )
+    parser.add_argument(
+        "--ckpt-path",
+        required=True,
+        help="Checkpoint path"
+    )
+    parser.add_argument(
+        "--input-shape",
+        type=int,
+        required=True,
+        help="Sampled input shape"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=-1,
+        help="Seed value"
+    )
+    parser.add_argument(
+        "--diff-steps",
+        type=int,
+        default=40,
+        help="Number of diffusion steps"
+    )
+    parser.add_argument(
+        "--gif",
+        action="store_true",
+        help="Store diffusion process as a GIF"
+    )
+    return parser.parse_args()
+
+
 def get_mnist_test_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     """Return the mnist test data set in numpy arrays.
 
@@ -213,6 +249,7 @@ def write_movie(
     # plt.ylim(-ylim, ylim)
 
     with writer.saving(fig, f"{name}.gif", 100):
-        for img in images:
+        for idx, img in enumerate(images):
             l.set_data(img/np.max(np.abs(img)))
+            plt.savefig(f"diff_imgs/{idx}.jpg")
             writer.grab_frame()
