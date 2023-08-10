@@ -166,3 +166,4 @@ cython_debug/
 .idea/
 *.gif
 sample_imgs/
+*.npz
