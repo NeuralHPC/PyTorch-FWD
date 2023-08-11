@@ -251,5 +251,4 @@ def write_movie(
     with writer.saving(fig, f"{name}.gif", 100):
         for idx, img in enumerate(images):
             l.set_data(img/np.max(np.abs(img)))
-            plt.savefig(f"diff_imgs/{idx}.jpg")
             writer.grab_frame()
