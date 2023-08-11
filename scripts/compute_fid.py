@@ -1,3 +1,5 @@
+"""Compute FID Score based on the sampled and original dataset."""
+
 import argparse
 
 import os
@@ -31,24 +33,23 @@ if __name__ == '__main__':
     fname = f'data/CelebAHQ/sample_{args.input_size}x{args.input_size}.npz'
     orig_sample_exists = os.path.exists(fname)
 
+    # Compute mean and variance for original dataset if doesn't exist
     if not orig_sample_exists:
         model = inception.InceptionV3(pretrained=True)
         net_state = model.init(
             jax.random.PRNGKey(0),
             jnp.ones((1, 256, 256, 3))
         )
-        batch_size = 50
+        batch_size = 100        # Adjust this for speed and based on system capacity
         apply_fn = jax.jit(partial(model.apply, train=False))
         mu1, sigma1 = fid.compute_statistics(args.data_dir, net_state, apply_fn, batch_size, (256, 256))
         np.savez(fname, mu=mu1, sigma=sigma1)
         print('Compute and saved the raw data statistics')
 
-    print('Loading statistics for CelebAHQ dataset')
     with jnp.load(fname) as data:
         mu1 = data['mu']
         sigma1 = data['sigma']
     
-    print('Loading statistics for sampled dataset')
     with jnp.load(args.sample_dir) as data:
         mu2 = data['mu']
         sigma2 = data['sigma']
