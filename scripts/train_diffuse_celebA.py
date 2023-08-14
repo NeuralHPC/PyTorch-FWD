@@ -6,7 +6,7 @@ from multiprocess import Pool
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 
-from clu import metric_writers
+from clu import metric_writers, parameter_overview
 
 import jax
 import jax.numpy as jnp
@@ -134,6 +134,7 @@ def main():
             (jnp.ones([batch_size] + input_shape),
              jnp.expand_dims(jnp.ones([batch_size]), -1),
              jnp.expand_dims(jnp.ones([batch_size]), -1)))
+    print(parameter_overview.get_parameter_overview(net_state))
     opt_state = opt.init(net_state)
     iterations = 0
 
