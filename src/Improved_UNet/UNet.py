@@ -2,6 +2,7 @@
 from typing import Tuple
 
 import jax
+import math
 import jax.numpy as jnp
 import flax.linen as nn
 from src.Improved_UNet.utils import ResBlock
@@ -28,11 +29,11 @@ class Improv_UNet(nn.Module):
             nn.silu,
             nn.Dense(self.model_channels * 4)
         ])
-        time_embeds = time_embedding(time)
+        time_embeds = time_embedding(self.sinus_timestep(time, self.model_channels))
         
         emb = time_embeds
         if self.classes is not None:
-            class_embeds = nn.Dense(self.model_channels * 4)(nn.one_hot(label, num_classes=self.classes))
+            class_embeds = nn.Dense(self.model_channels * 4)(label)
             emb = emb + class_embeds
 
         # Downsampling blocks
@@ -152,3 +153,14 @@ class Improv_UNet(nn.Module):
             nn.Conv(self.out_channels, [3, 3], padding="SAME")
         ])
         return final_conv(up12)
+
+    def sinus_timestep(self, timesteps, dim , max_period=10000):
+        half = dim // 2
+        freqs = jnp.exp(
+            -math.log(max_period) * jnp.arange(0, half) / half
+        )
+        args = timesteps[:, None] * freqs[None]
+        embedding = jnp.concatenate([jnp.cos(args), jnp.sin(args)], axis=-1)
+        if dim%2:
+            embedding = jnp.concatenate([embedding, jnp.zeros_like(embedding[:, :1])], axis=-1)
+        return embedding

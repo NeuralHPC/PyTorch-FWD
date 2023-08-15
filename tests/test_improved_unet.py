@@ -17,15 +17,15 @@ def test_imporv_Unet(input_shape: List):
         classes=1000
     )
     key = jax.random.PRNGKey(42)
-    batch_size = 1
+    batch_size = 10
     net_state = model.init(
         key,
         (jnp.ones([batch_size] + input_shape),
-             jnp.expand_dims(jnp.ones([batch_size]), -1),
+             jnp.ones([batch_size]),
              jnp.expand_dims(jnp.ones([batch_size]), -1))
     )
     dummy_input = (jnp.zeros([batch_size] + input_shape),
-             jnp.expand_dims(jnp.ones([batch_size]), -1),
+             jnp.ones([batch_size]),
              jnp.expand_dims(jnp.ones([batch_size]), -1))
     dummy_output = model.apply(net_state, dummy_input)
     assert dummy_output.shape == tuple([batch_size]+input_shape)

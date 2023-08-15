@@ -20,7 +20,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from src.util import _parse_args, get_batched_celebA_paths, batch_loader
-from src.networks import UNet
+# from src.networks import UNet
+from src.Improved_UNet.UNet import Improv_UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA
 
 
@@ -43,7 +44,7 @@ def train_step(batch: jnp.ndarray,
     
     current_step_array = jax.random.randint(
         key, shape=[batch.shape[0]], minval=1, maxval=time_steps)
-    current_step_array = jnp.expand_dims(current_step_array, -1)
+    # current_step_array = jnp.expand_dims(current_step_array, -1)
     seed_array = jax.random.split(key, batch.shape[0])
     batch_map = jax.vmap(partial(sample_noise, max_steps=time_steps))
     x, y = batch_map(batch, current_step_array, seed_array)
@@ -122,17 +123,22 @@ def main():
     print(f"Input shape: {input_shape}")
 
     # Load test data images
-    test_patches, _ = get_batched_celebA_paths(args.data_dir)
+    test_patches, lbl_dict = get_batched_celebA_paths(args.data_dir)
     imgs, labels = batch_loader(test_patches[0], labels_dict, resize)
     test_data = (imgs[:5], labels[:5])
+    classes_no = len(set( val for val in lbl_dict.values()))
 
-
-    model = UNet(output_channels=input_shape[-1])
+    # model = UNet(output_channels=input_shape[-1])
+    model = Improv_UNet(
+        out_channels=input_shape[-1],
+        model_channels=128,
+        classes=classes_no
+    )
     opt = optax.adam(0.001)
     # create the model state
     net_state = model.init(key, 
             (jnp.ones([batch_size] + input_shape),
-             jnp.expand_dims(jnp.ones([batch_size]), -1),
+             jnp.ones([batch_size]),
              jnp.expand_dims(jnp.ones([batch_size]), -1)))
     print(parameter_overview.get_parameter_overview(net_state))
     opt_state = opt.init(net_state)

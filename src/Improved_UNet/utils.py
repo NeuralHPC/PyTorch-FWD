@@ -25,7 +25,7 @@ class ResBlock(nn.Module):
 
         h = in_layers(x)
         emb_out = emd_layers(emb)
-        # expand dims of the emb_out - if necessary add later
+        emb_out = jnp.expand_dims(emb_out, axis=[1, 2])
         h = h + emb_out
         h = out_layers(h)
 
