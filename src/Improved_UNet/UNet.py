@@ -1,9 +1,10 @@
+"""UNet stated in Improved Denoising Diffusion Probabilistic Models (https://arxiv.org/abs/2102.09672)"""
 from typing import Tuple
 
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-from utils import ResBlock
+from src.Improved_UNet.utils import ResBlock
 
 class Improv_UNet(nn.Module):
     out_channels: int
@@ -88,13 +89,11 @@ class Improv_UNet(nn.Module):
             out_channels=self.model_channels * 4,
             use_conv=True
         )(up1, emb)
-        up2 = up2 + dp8
         up3 = ResBlock(
             out_channels=self.model_channels * 4,
             use_conv=True
         )(up2, emb)
-        up3 = up3 + dps3
-
+        up3 = up3 + dp8
         ups1 = upsample(up3, self.model_channels * 4)
 
         up4 = ResBlock(
@@ -106,12 +105,11 @@ class Improv_UNet(nn.Module):
             out_channels=self.model_channels * 3,
             use_conv=True
         )(up4, emb)
-        up5 = up5 + dp6
         up6 = ResBlock(
             out_channels=self.model_channels * 3,
             use_conv=True
         )(up5, emb)
-        up6 = up6 + dps2
+        up6 = up6 + dp6
 
         ups2 = upsample(up6, self.model_channels * 3)
 
@@ -124,13 +122,12 @@ class Improv_UNet(nn.Module):
             out_channels=self.model_channels * 2,
             use_conv=True
         )(up7, emb)
-        up8 = up8 + dp4
         up9 = ResBlock(
             out_channels=self.model_channels * 2,
             use_conv=True
         )(up8, emb)
-        up9 = up9 + dps1
-        
+        up9 = up9 + dp4
+
         ups3 = upsample(up9, self.model_channels * 2)
 
         up10 = ResBlock(
