@@ -83,14 +83,17 @@ class Improv_UNet(nn.Module):
             out_channels=self.model_channels * 4,
             use_conv=True
         )(mp2, emb)
+        up1 = up1 + dp9
         up2 = ResBlock(
             out_channels=self.model_channels * 4,
             use_conv=True
         )(up1, emb)
+        up2 = up2 + dp8
         up3 = ResBlock(
             out_channels=self.model_channels * 4,
             use_conv=True
         )(up2, emb)
+        up3 = up3 + dps3
 
         ups1 = upsample(up3, self.model_channels * 4)
 
@@ -98,14 +101,17 @@ class Improv_UNet(nn.Module):
             out_channels=self.model_channels * 3,
             use_conv=True
         )(ups1, emb)
+        up4 = up4 + dp7
         up5 = ResBlock(
             out_channels=self.model_channels * 3,
             use_conv=True
         )(up4, emb)
+        up5 = up5 + dp6
         up6 = ResBlock(
             out_channels=self.model_channels * 3,
             use_conv=True
         )(up5, emb)
+        up6 = up6 + dps2
 
         ups2 = upsample(up6, self.model_channels * 3)
 
@@ -113,31 +119,35 @@ class Improv_UNet(nn.Module):
             out_channels=self.model_channels * 2,
             use_conv=True
         )(ups2, emb)
+        up7 = up7 + dp5
         up8 = ResBlock(
             out_channels=self.model_channels * 2,
             use_conv=True
         )(up7, emb)
+        up8 = up8 + dp4
         up9 = ResBlock(
             out_channels=self.model_channels * 2,
             use_conv=True
         )(up8, emb)
-
+        up9 = up9 + dps1
+        
         ups3 = upsample(up9, self.model_channels * 2)
 
         up10 = ResBlock(
             out_channels=self.model_channels,
             use_conv=True
         )(ups3, emb)
+        up10 = up10 + dp3
         up11 = ResBlock(
             out_channels=self.model_channels,
             use_conv=True
         )(up10, emb)
+        up11 = up11 + dp2
         up12 = ResBlock(
             out_channels=self.model_channels,
             use_conv=True
         )(up11, emb)
-
-        # TODO: Add residual connections from encoder to decoder
+        up12 = up12 + dp1
 
         final_conv = nn.Sequential([
             nn.GroupNorm(),
