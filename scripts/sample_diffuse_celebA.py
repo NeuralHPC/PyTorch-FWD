@@ -58,6 +58,36 @@ def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
         return process_array[0], steps
     return process_array[0]
 
+def sample_net_denoise(net_state: FrozenDict, model: nn.Module, key: int,
+                    input_shape: List[int], max_steps: int, test_label: int,
+                    is_gif: bool) -> Union[np.ndarray, Tuple[np.ndarray, List]]:
+    if key == -1:
+        key = random.randint(0, 50000)
+    prng_key = jax.random.PRNGKey(key)
+    x_t = jax.random.normal(
+        prng_key, shape=[1]+input_shape
+    )
+    betas = jnp.linspace(0.0001, 0.02, max_steps)
+    alphas = 1-betas
+    alpha_cumprod = jnp.cumprod(alphas)
+    steps = [x_t]
+    x_t_1 = x_t
+    for time in reversed(range(max_steps)):
+        prng_key = jax.random.PRNGKey(random.randint(0, 50000))
+        z = jax.random.normal(
+            prng_key, shape=[1]+input_shape
+        ) 
+        denoise = model.apply(net_state,
+                              (x_t_1,
+                               jnp.expand_dims(jnp.array(time), -1),
+                               jnp.expand_dims(jnp.array(test_label), 0)))
+        x_mean = (x_t_1  - (denoise *((1-alphas[time])/(jnp.sqrt(1-alpha_cumprod[time])))))/(jnp.sqrt(alphas[time]))
+        x_t_1 = x_mean + jnp.sqrt(1-alphas[time]) * z
+        steps.append(x_t_1)
+    return x_t_1[0], steps
+
+
+
 
 if __name__ == "__main__":
     args = _sampler_args()
@@ -81,7 +111,7 @@ if __name__ == "__main__":
     if args.gif:
         key = jax.random.PRNGKey(random.randint(0, 10000))
         label = jax.random.choice(key, labels, [1], replace=False)
-        test_img, steps = sample_net_noise(net_state, model, args.seed, [args.input_shape, args.input_shape, 3], args.diff_steps, label[0], args.gif)
+        test_img, steps = sample_net_denoise(net_state, model, args.seed, [args.input_shape, args.input_shape, 3], args.diff_steps, label[0], args.gif)
         write_movie([s[0] for s in steps], xlim=1, ylim=1)
         sys.exit("Writing complete")
     

@@ -25,8 +25,8 @@ def _parse_args():
     parser.add_argument(
         "--learning-rate",
         type=float,
-        default=1e-3,
-        help="learning rate for optimizer (default: 1e-3)",
+        default=1e-4,
+        help="learning rate for optimizer (default: 1e-4)",
     )
     parser.add_argument(
         "--epochs", type=int, default=21, help="number of epochs (default: 21)"

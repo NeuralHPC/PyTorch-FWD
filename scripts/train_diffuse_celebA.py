@@ -56,11 +56,14 @@ def train_step(batch: jnp.ndarray,
 
 def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
     seed = 5
+    time_steps = 100
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
+    # time_steps_list = [1, time_steps//4, time_steps//2]
+    time_steps_list = [1, 10, 25, 50]
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
     # step tests
-    for test_time in [1, time_steps//4, time_steps//2]:
+    for test_time in time_steps_list:
         test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps, test_data)
         writer.write_images(e, {f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
@@ -69,7 +72,7 @@ def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
-    for test_time in [1, time_steps//4, time_steps//2]:
+    for test_time in time_steps_list:
         test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps, test_data)
         writer.write_images(e, {
             f'test_{test_time}_{seed}': test_image})
@@ -134,7 +137,7 @@ def main():
         model_channels=128,
         classes=classes_no
     )
-    opt = optax.adam(0.001)
+    opt = optax.adam(args.learning_rate)
     # create the model state
     net_state = model.init(key, 
             (jnp.ones([batch_size] + input_shape),
