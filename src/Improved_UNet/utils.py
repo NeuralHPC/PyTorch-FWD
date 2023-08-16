@@ -1,5 +1,7 @@
+from typing import Any
 import flax.linen as nn
 import jax.numpy as jnp
+import jax
 
 class ResBlock(nn.Module):
     out_channels: int
@@ -35,3 +37,12 @@ class ResBlock(nn.Module):
             return nn.Conv(self.out_channels, [3, 3], padding="SAME")(x) + h
         else:
             return nn.Conv(self.out_channels, [1, 1])(x) + h
+
+class UPSample(nn.Module):
+    out_channels: int
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray, emb: jnp.array=None) -> jnp.ndarray:
+        B, H, W, C = x.shape
+        x = jax.image.resize(x, (B, H * 2, W * 2, C), 'nearest')
+        return nn.Conv(self.out_channels, [3, 3], padding="SAME")(x)
