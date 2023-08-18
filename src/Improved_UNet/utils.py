@@ -2,6 +2,7 @@ from typing import Any
 import flax.linen as nn
 import jax.numpy as jnp
 import jax
+import math
 
 class ResBlock(nn.Module):
     out_channels: int
@@ -54,3 +55,31 @@ class UPSample(nn.Module):
         B, H, W, C = x.shape
         x = jax.image.resize(x, (B, H * 2, W * 2, C), 'nearest')
         return nn.Conv(self.out_channels, [3, 3], padding="SAME")(x)
+    
+
+class AttentionBlock(nn.Module):
+    channels: int
+    num_heads: int = 1
+
+    @nn.compact
+    def __call__(self, x) -> Any:
+        B, H, W, C = x.shape
+        # x = jnp.reshape(x, (B, C, -1))
+        x = nn.GroupNorm()(x)
+        qkv = nn.Conv(self.channels * 3, [1], padding="SAME")(x)
+        qkv = jnp.reshape(qkv, (B, qkv.shape[-1], -1))
+        qkv = jnp.reshape(qkv, (B * self.num_heads, -1, qkv.shape[2]))
+        h = self.attention(qkv)
+        h = jnp.reshape(h, (B, h.shape[-1], -1))
+        h = nn.Conv(self.channels, [1])(h).reshape(B, H, W, C)
+        return x + h
+
+    def attention(self, qkv: jnp.ndarray) -> jnp.ndarray:
+        ch = qkv.shape[1] // 3
+        q, k ,v = jnp.split(qkv, 3, axis=1)
+        scale = 1 / math.sqrt(math.sqrt(ch))
+        weight = jnp.einsum(
+            "bct, bcs -> bts", q*scale, k*scale
+        )
+        weight = nn.softmax(weight, axis=-1)
+        return jnp.einsum("bts, bcs -> bct", weight, v)
