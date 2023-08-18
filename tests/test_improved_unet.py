@@ -14,7 +14,10 @@ def test_imporv_Unet(input_shape: List):
     model = Improv_UNet(
         out_channels=input_shape[-1],
         model_channels=128,
-        classes=1000
+        classes=1000,
+        num_res_blocks=1,
+        num_heads=2,
+        num_heads_ups=2
     )
     key = jax.random.PRNGKey(42)
     batch_size = 10

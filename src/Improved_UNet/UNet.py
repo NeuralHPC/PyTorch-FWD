@@ -10,11 +10,11 @@ class Improv_UNet(nn.Module):
     out_channels: int
     model_channels: int
     classes: int
-    channel_mult = [1, 1, 2, 2, 4] # 64x64 TODO: Make this a CLA
+    channel_mult = [1, 2, 2, 4] # 64x64 TODO: Make this a CLA
     num_res_blocks: int = 2 # 64x64 TODO: Make this a CLA
-    num_heads: int = 1
-    num_heads_ups: int = 1
-    attention_res = [8, 16]
+    num_heads: int = 4
+    num_heads_ups: int = 4
+    attention_res = [64//16, 64//8]
 
     @nn.compact
     def __call__(self, x_in: Tuple[jnp.ndarray]) -> jnp.ndarray:
@@ -83,37 +83,29 @@ class Improv_UNet(nn.Module):
         hs = []
         h = x
         enc_block, ds = encoder_block()
-        print(h.shape)
+
         for block in enc_block:
             if isinstance(block, ResBlock):
                 h = block(h, emb)
             else:
                 h = block(h)
-            print(h.shape, type(block))
-            hs.append(h)
-        print(len(hs))
+            if not isinstance(block, AttentionBlock):
+                hs.append(h)
+
         for block in middle_block():
             if isinstance(block, ResBlock):
                 h = block(h, emb)
             else:
                 h = block(h)
-            print(h.shape, type(block))
 
-        print('Decoder block')
         for block in decoder_block(ds):
-            print(h.shape, type(block))
             if isinstance(block, ResBlock):
                 p = hs.pop()
                 cat_in = jnp.concatenate([h, p], axis=-1)
                 h = block(cat_in, emb)
-            elif isinstance(block, AttentionBlock):
-                #cat_in = jnp.concatenate([h, p], axis=-1)
-                h = block(h)
             else:
                 h = block(h)
-            
 
-        
         final_conv = nn.Sequential([
             nn.GroupNorm(),
             nn.silu,
@@ -133,24 +125,3 @@ class Improv_UNet(nn.Module):
         if dim%2:
             embedding = jnp.concatenate([embedding, jnp.zeros_like(embedding[:, :1])], axis=-1)
         return embedding
-
-if __name__ == '__main__':
-    input_shape = [64, 64, 3]
-    model = Improv_UNet(
-        out_channels=input_shape[-1],
-        model_channels=128,
-        classes=1000
-    )
-    key = jax.random.PRNGKey(42)
-    batch_size = 10
-    net_state = model.init(
-        key,
-        (jnp.ones([batch_size] + input_shape),
-             jnp.ones([batch_size]),
-             jnp.expand_dims(jnp.ones([batch_size]), -1))
-    )
-    dummy_input = (jnp.zeros([batch_size] + input_shape),
-             jnp.ones([batch_size]),
-             jnp.expand_dims(jnp.ones([batch_size]), -1))
-    dummy_output = model.apply(net_state, dummy_input)
-    assert dummy_output.shape == tuple([batch_size]+input_shape)
