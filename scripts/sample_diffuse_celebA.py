@@ -14,6 +14,7 @@ from src.util import write_movie, _sampler_args, get_label_dict
 from functools import partial
 from tqdm import tqdm
 from src.fid import inception, fid
+import matplotlib.pyplot as plt
 
 
 def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
@@ -84,7 +85,7 @@ def sample_net_denoise(net_state: FrozenDict, model: nn.Module, key: int,
         x_mean = (x_t_1  - (denoise *((1-alphas[time])/(jnp.sqrt(1-alpha_cumprod[time])))))/(jnp.sqrt(alphas[time]))
         x_t_1 = x_mean + jnp.sqrt(1-alphas[time]) * z
         steps.append(x_t_1)
-    return x_t_1[0], steps
+    return x_t_1 - jnp.sqrt(1-alphas[time]) * z, steps
 
 
 
@@ -109,10 +110,17 @@ if __name__ == "__main__":
 
     # Sample 1 image and save as GIF
     if args.gif:
-        key = jax.random.PRNGKey(random.randint(0, 10000))
+        seed = random.randint(0, 10000)
+        key = jax.random.PRNGKey(seed)
         label = jax.random.choice(key, labels, [1], replace=False)
+        print(seed,label)
         test_img, steps = sample_net_denoise(net_state, model, args.seed, [args.input_shape, args.input_shape, 3], args.diff_steps, label[0], args.gif)
+        test_img = test_img[0]
         write_movie([s[0] for s in steps], xlim=1, ylim=1)
+        plt.imshow(test_img)
+        plt.axis("off")
+        plt.savefig("final_img.png", dpi=600, bbox_inches="tight")
+        plt.close()
         sys.exit("Writing complete")
     
     # Sample all the images
