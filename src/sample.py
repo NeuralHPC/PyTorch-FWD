@@ -1,7 +1,9 @@
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import numpy as np
+import random
 
 import flax.linen as nn
 from flax.core.frozen_dict import FrozenDict
@@ -49,6 +51,31 @@ def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
         prng_key = jax.random.split(prng_key, 1)[0]
         process_array = sample_noise(process_array, time, prng_key, max_steps)[0]
     return process_array[0]
+
+def sample_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
+                    input_shape: List[int], max_steps: int, test_label: int = 3338) -> Union[np.ndarray, Tuple[np.ndarray, List]]:
+    if key == -1:
+        key = random.randint(0, 50000)
+    prng_key = jax.random.PRNGKey(key)
+    x_t = jax.random.normal(
+        prng_key, shape=[1]+input_shape
+    )
+    betas = jnp.linspace(0.0001, 0.02, max_steps)
+    alphas = 1-betas
+    alpha_cumprod = jnp.cumprod(alphas)
+    x_t_1 = x_t
+    for time in reversed(range(max_steps)):
+        prng_key = jax.random.PRNGKey(random.randint(0, 50000))
+        z = jax.random.normal(
+            prng_key, shape=[1]+input_shape
+        ) 
+        denoise = model.apply(net_state,
+                              (x_t_1,
+                               jnp.expand_dims(jnp.array(time), -1),
+                               jnp.expand_dims(jnp.array(test_label), 0)))
+        x_mean = (x_t_1  - (denoise *((1-alphas[time])/(jnp.sqrt(1-alpha_cumprod[time])))))/(jnp.sqrt(alphas[time]))
+        x_t_1 = x_mean + jnp.sqrt(1-alphas[time]) * z
+    return x_t_1[0]
 
 def sample_net_test(net_state: FrozenDict, model: nn.Module, key: int,
         test_time_step: int, max_steps: int, data_dir: str):

@@ -10,8 +10,8 @@ class Improv_UNet(nn.Module):
     out_channels: int
     model_channels: int
     classes: int
-    channel_mult = [1, 2, 2, 4, 4]
-    num_res_blocks: int = 3
+    channel_mult = [1, 2, 2, 4] # 64x64 TODO: Make this a CLA
+    num_res_blocks: int = 2 # 64x64 TODO: Make this a CLA
 
     @nn.compact
     def __call__(self, x_in: Tuple[jnp.ndarray]) -> jnp.ndarray:
@@ -31,13 +31,14 @@ class Improv_UNet(nn.Module):
 
         def encoder_block():
             blocks =[
-                nn.Conv(self.model_channels, [3, 3], padding="SAME") # dp1
+                nn.Conv(self.model_channels, [3, 3], padding="SAME")
             ]
             for level, mult in enumerate(self.channel_mult):
                 for _ in range(self.num_res_blocks):
                     blocks.append(ResBlock(out_channels=self.model_channels * mult))
 
                 if level != len(self.channel_mult) - 1:
+                    # Downsample
                     blocks.append(
                         nn.Conv(mult*self.model_channels, [3, 3], strides=2, padding="SAME")
                     )
@@ -52,12 +53,10 @@ class Improv_UNet(nn.Module):
         def decoder_block():
             blocks = []
             for level, mult in list(enumerate(self.channel_mult))[::-1]:
-                # layers = []
                 for i in range(self.num_res_blocks+1):
                     blocks.append(ResBlock(out_channels=self.model_channels*mult, use_conv=True))
                     if level and i == self.num_res_blocks:
                         blocks.append(UPSample(out_channels=self.model_channels*mult))
-                    # blocks.append(layers)
             return blocks
 
         hs = []

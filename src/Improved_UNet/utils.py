@@ -17,8 +17,7 @@ class ResBlock(nn.Module):
         ])
         emd_layers = nn.Sequential([
             nn.silu,
-            # is scale_shift_norm necesarry? - yes it adds stability to training large images.
-            nn.Dense(2 * self.out_channels if self.use_scale_shift_norm else self.out_channels) 
+            nn.Dense(2 * self.out_channels if self.use_scale_shift_norm else self.out_channels) # is scale_shift_norm necesarry?
         ])
         out_layers = [
             nn.GroupNorm(),
@@ -37,7 +36,8 @@ class ResBlock(nn.Module):
             h = out_rest(h)
         else:
             h = h + emb_out
-            h = nn.Sequential(out_layers)(h)
+            out_layers = nn.Sequential(out_layers)
+            h = out_layers(h)
 
         if self.out_channels == x.shape[-1]:
             return x + h

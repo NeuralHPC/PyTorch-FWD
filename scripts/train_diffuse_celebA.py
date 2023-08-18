@@ -19,10 +19,11 @@ from flax.core.frozen_dict import FrozenDict
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 from src.util import _parse_args, get_batched_celebA_paths, batch_loader
 # from src.networks import UNet
 from src.Improved_UNet.UNet import Improv_UNet
-from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA
+from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA, sample_DDPM
 
 
 
@@ -69,7 +70,7 @@ def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
         
     seed = 6
-    test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
+    test_image = sample_DDPM(net_state, model, seed, input_shape, time_steps)
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
     for test_time in time_steps_list:
@@ -135,7 +136,7 @@ def main():
     model = Improv_UNet(
         out_channels=input_shape[-1],
         model_channels=128,
-        classes=classes_no
+        classes=None
     )
     opt = optax.adam(args.learning_rate)
     # create the model state
@@ -186,10 +187,10 @@ def main():
                     model, opt, args.time_steps)
                 if pos % 50 == 0:
                     print(e, pos, mean_loss, len(load_asinc_dict))
-            
+
                 iterations += 1
                 writer.write_scalars(iterations, {"loss": mean_loss})
-
+            print(' ', flush=True)
             if e % 5 == 0:
                 print('testing...')
                 testing(e, net_state, model, input_shape, writer,
