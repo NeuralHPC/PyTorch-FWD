@@ -239,7 +239,7 @@ def write_movie(
     metadata = dict(
         title="Diffusion", artist="Matplotlib", comment="Diffusion movie!"
     )
-    writer = ffmpeg_writer(fps=3, metadata=metadata)
+    writer = ffmpeg_writer(fps=60, metadata=metadata)
 
     fig = plt.figure()
     l = plt.imshow(images[0]/np.max(np.abs(images[0])))
