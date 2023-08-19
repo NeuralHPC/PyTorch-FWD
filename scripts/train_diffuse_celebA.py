@@ -20,7 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-from src.util import _parse_args, get_batched_celebA_paths, batch_loader
+from src.util import _parse_args, get_batched_celebA_paths, batch_loader, _save_model
 # from src.networks import UNet
 from src.Improved_UNet.UNet import Improv_UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA, sample_DDPM
@@ -104,6 +104,8 @@ def main():
     now = datetime.datetime.now()
     
     writer = metric_writers.create_default_writer(args.logdir + f"/{now}")
+    checkpoint_dir = os.path.join(args.logdir, 'checkpoints')
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
     np.random.seed(args.seed)
     key = jax.random.PRNGKey(args.seed)
@@ -127,18 +129,38 @@ def main():
     print(f"Input shape: {input_shape}")
 
     # Load test data images
-    test_patches, lbl_dict = get_batched_celebA_paths(args.data_dir)
+    test_patches, labels_dict = get_batched_celebA_paths(args.data_dir)
     imgs, labels = batch_loader(test_patches[0], labels_dict, resize)
     test_data = (imgs[:5], labels[:5])
-    classes_no = len(set( val for val in lbl_dict.values()))
+
+    # Process model related args
+    if args.conditional:
+        print("Using class conditional")
+    
+    if args.attn_heads_upsample == -1:
+        args.attn_heads_upsample = args.attn_heads
+    
+    channel_mult = []
+    for value in args.channel_mult.split(","):
+        channel_mult.append(int(value))
+
+    attn_res = []
+    for value in args.attn_resolution.split(","):
+        attn_res.append(input_shape[0]//int(value)) 
 
     # model = UNet(output_channels=input_shape[-1])
     model = Improv_UNet(
         out_channels=input_shape[-1],
-        model_channels=128,
-        classes=None
+        base_channels=args.base_channels,
+        class_conditional=args.conditional,
+        channel_mult=tuple(channel_mult),
+        num_res_blocks=args.num_res_blocks,
+        num_heads=args.attn_heads,
+        num_heads_ups=args.attn_heads_upsample,
+        attention_res=tuple(attn_res)
     )
     opt = optax.adam(args.learning_rate)
+
     # create the model state
     net_state = model.init(key, 
             (jnp.ones([batch_size] + input_shape),
@@ -196,14 +218,11 @@ def main():
                 testing(e, net_state, model, input_shape, writer,
                         time_steps=args.time_steps, test_data=test_data)
                 to_storage = (net_state, opt_state, model)
-                os.makedirs('log/checkpoints/', exist_ok=True)
-                with open(f'log/checkpoints/e_{e}_time_{now}.pkl', 'wb') as f:
-                    pickle.dump(to_storage, f)
-
+                _save_model(checkpoint_dir, now, e, to_storage)
 
     print('testing...')
     testing(e, net_state, model, input_shape, writer, time_steps=args.time_steps, test_data=test_data)
-
+    _save_model(checkpoint_dir, now, args.epochs, (net_state, opt_state, model))
 
 if __name__ == '__main__':
     main()

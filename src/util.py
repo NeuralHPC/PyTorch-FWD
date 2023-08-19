@@ -8,7 +8,9 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as manimation
 import os
 import json
-
+import pickle
+import datetime
+from flax.core.frozen_dict import FrozenDict
 
 
 from PIL import Image
@@ -50,7 +52,28 @@ def _parse_args():
         "--data-dir", required=True, help="Base dataset path"
     )
     parser.add_argument(
-        "--resize", type=int, default=None, help="Resize the input image"
+        "--resize", type=int, default=64, help="Resize the input image"
+    )
+    parser.add_argument(
+        "--channel_mult", type=str, default="1,2,2,4", help="Channel multiplier for the UNet"
+    )
+    parser.add_argument(
+        "--num-res-blocks", type=int, default=2, help="Number of residual blocks for the model"
+    )
+    parser.add_argument(
+        "--conditional", action="store_false", help="Add the class condition to model"
+    )
+    parser.add_argument(
+        "--attn-heads", type=int, default=4, help="Number of attention heads"
+    )
+    parser.add_argument(
+        "--attn-heads-upsample", type=int, default=-1, help="Number of attention heads during upsample"
+    )
+    parser.add_argument(
+        "--attn-resolution", type=str, default="16,8", help="Resolutions at which attention should be applied"
+    )
+    parser.add_argument(
+        "--base-channels", type=int, default=128, help="Base channels for the UNet to start with"
     )
     return parser.parse_args()
 
@@ -249,6 +272,22 @@ def write_movie(
     # plt.ylim(-ylim, ylim)
 
     with writer.saving(fig, f"{name}.gif", 100):
-        for idx, img in enumerate(images):
+        for img in images:
             l.set_data(img/np.max(np.abs(img)))
             writer.grab_frame()
+
+def _save_model(checkpoint_dir: str,
+                time: datetime.datetime,
+                epochs: int,
+                model_data: Tuple[FrozenDict]) -> None:
+    """Save the model parameters
+
+    Args:
+        checkpoint_dir (str): Checkpoint directory
+        time (datetime.datetime): Time of saving
+        epochs (int): Epoch of saving
+        model_data (Tuple[FrozenDict]): Tuple containing the model data
+    """
+    save_dir = os.path.join(checkpoint_dir, f"e_{epochs}_time_{time}.pkl")
+    with open(save_dir, "wb") as fp:
+        pickle.dump(model_data, fp)

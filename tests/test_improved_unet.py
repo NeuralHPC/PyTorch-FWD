@@ -13,11 +13,13 @@ def test_imporv_Unet(input_shape: List):
     """Test UNet from the Improved Denoising Diffusion Probabilistic Models (https://arxiv.org/abs/2102.09672)"""
     model = Improv_UNet(
         out_channels=input_shape[-1],
-        model_channels=128,
-        classes=1000,
+        base_channels=128,
+        class_conditional=True,
+        channel_mult=(1, 2, 4),
         num_res_blocks=1,
         num_heads=2,
-        num_heads_ups=2
+        num_heads_ups=2,
+        attention_res=(64//2, 64//8)
     )
     key = jax.random.PRNGKey(42)
     batch_size = 10
