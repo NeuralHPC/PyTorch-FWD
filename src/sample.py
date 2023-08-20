@@ -67,7 +67,7 @@ def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
 
 
 def sample_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
-                    input_shape: List[int], max_steps: int, test_label: int = 3338) -> np.ndarray:
+                    input_shape: List[int], max_steps: int, test_label: int = 3338) -> Union[np.ndarray, List[np.ndarray]]:
     """DDPM Sampling from https://arxiv.org/pdf/2006.11239.pdf.
 
     Args:
@@ -79,7 +79,7 @@ def sample_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
         test_label (int, optional): Test label to sample for class conditioning. Defaults to 3338.
 
     Returns:
-        np.ndarray: Return the sampled image.
+        Union[np.ndarray, List[np.ndarray]]: Return sampled image and all the steps.
     """
     if key == -1:
         key = random.randint(0, 50000)
@@ -88,6 +88,7 @@ def sample_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
         prng_key, shape=[1]+input_shape
     )
     x_t_1 = x_t
+    steps = [x_t_1]
     for time in reversed(range(max_steps)):
         alpha_t, alpha, _ = linear_noise_scheduler(time, max_steps)
         prng_key = jax.random.PRNGKey(random.randint(0, 50000))
@@ -100,7 +101,48 @@ def sample_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
                                jnp.expand_dims(jnp.array(test_label), 0)))
         x_mean = (x_t_1  - (denoise *((1-alpha)/(jnp.sqrt(1-alpha_t)))))/(jnp.sqrt(alpha))
         x_t_1 = x_mean + jnp.sqrt(1-alpha) * z
-    return x_t_1[0]
+        steps.append(x_t_1)
+    x_0 = x_t_1 - jnp.sqrt(1-alpha) * z
+    return x_0[0], steps
+
+
+def batch_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
+                    input_shape: List[int], max_steps: int, batch_size: int, test_label: List[int]) -> Union[np.ndarray, List[np.ndarray]]:
+    """Batch DDPM Sampling from https://arxiv.org/pdf/2006.11239.pdf.
+
+    Args:
+        net_state (FrozenDict): Model parameters.
+        model (nn.Module): Model instance.
+        key (int): PRNGKey.
+        input_shape (List[int]): input_shape.
+        max_steps (int): Maximum steps.
+        batch_size (int): Number of images to be sampled
+        test_label (List[int]): Test labels to sample for class conditioning.
+
+    Returns:
+        Union[np.ndarray, List[np.ndarray]]: Return sampled image and all the steps.
+    """
+    if key == -1:
+        key = random.randint(0, 50000)
+    prng_key = jax.random.PRNGKey(key)
+    x_t = jax.random.normal(
+        prng_key, shape=[batch_size]+input_shape
+    )
+    x_t_1 = x_t
+    for time in reversed(range(max_steps)):
+        alpha_t, alpha, _ = linear_noise_scheduler(time, max_steps)
+        prng_key = jax.random.PRNGKey(random.randint(0, 50000))
+        z = jax.random.normal(
+            prng_key, shape=[batch_size]+input_shape
+        )
+        denoise = model.apply(net_state,
+                              (x_t_1,
+                               jnp.array([time]*batch_size),
+                               test_label))
+        x_mean = (x_t_1  - (denoise *((1-alpha)/(jnp.sqrt(1-alpha_t)))))/(jnp.sqrt(alpha))
+        x_t_1 = x_mean + jnp.sqrt(1-alpha) * z
+    return x_t_1
+
 
 
 def sample_DDIM(net_state: FrozenDict, model: nn.Module, key: int,
@@ -113,7 +155,7 @@ def sample_DDIM(net_state: FrozenDict, model: nn.Module, key: int,
         key (int): PRNGKey.
         input_shape (List[int]): input_shape.
         max_steps (int): Maximum steps.
-        test_label (int, optional): Test label to sample for class conditioning. Defaults to 3338.
+        test_label (int, optional): Test labels to sample for class conditioning.
 
     Returns:
         np.ndarray: Return the sampled image.

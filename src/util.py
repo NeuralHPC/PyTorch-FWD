@@ -111,6 +111,9 @@ def _sampler_args():
         action="store_true",
         help="Store diffusion process as a GIF"
     )
+    parser.add_argument(
+        "--gpus", type=int, default=-1, help="set gpu no by hand. Use all if -1 (default)."
+    )
     return parser.parse_args()
 
 
