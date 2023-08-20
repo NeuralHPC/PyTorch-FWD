@@ -8,27 +8,44 @@ import random
 import flax.linen as nn
 from flax.core.frozen_dict import FrozenDict
 
-from src.util import get_mnist_test_data, get_batched_celebA_paths, batch_loader
+from src.util import get_mnist_test_data
 
-import matplotlib.pyplot as plt
 
-def get_alpha(current_time_step, max_steps):
+def linear_noise_scheduler(current_time_step: int, max_steps: int) -> Tuple[jnp.ndarray]:
+    """Sample linear noise scheduler.
+
+    Args:
+        current_time_step (int): Current time
+        max_steps (int): Maximum number of steps
+
+    Returns:
+        Tuple[jnp.ndarray]: Tuple containing alpha_bar, alpha and betas at current time
+    """
     betas = jnp.linspace(0.0001, 0.02, max_steps)
     alphas = 1-betas
-    alpha_cumprod = jnp.cumprod(alphas)
-    return alpha_cumprod[current_time_step]
+    alpha_ts = jnp.cumprod(alphas)
+    return alpha_ts[current_time_step], alphas[current_time_step], betas[current_time_step]
+
 
 def sample_noise(img: jnp.ndarray,
                  current_time_step: int,
                  key: jnp.ndarray,
-                 max_steps: int):
-    # alpha = current_time_step/max_steps
-    alpha = get_alpha(current_time_step, max_steps)
+                 max_steps: int) -> Tuple[jnp.ndarray]:
+    """Diffusion forward step.
+
+    Args:
+        img (jnp.ndarray): Input image
+        current_time_step (int): Current time
+        key (jnp.ndarray): PRNGKey
+        max_steps (int): Total time
+
+    Returns:
+        Tuple[jnp.ndarray]: Tuple containing the noised image and noise
+    """
+    alpha_t, _, _ = linear_noise_scheduler(current_time_step, max_steps)
     noise = jax.random.normal(
             key, shape=img.shape)
-    # x = (1-alpha)*img + noise * alpha
-    x = jnp.sqrt(alpha)*img + jnp.sqrt(1-alpha)*noise
-    # return x, img - x
+    x = jnp.sqrt(alpha_t)*img + jnp.sqrt(1-alpha_t )*noise
     return x, noise
 
 
@@ -39,10 +56,6 @@ def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
             prng_key, shape=[1] + input_shape)
     
     for time in reversed(range(max_steps)):
-        # de_noise = model.apply(net_state,
-        #     (process_array,
-        #      jnp.expand_dims(jnp.array(time), -1),
-        #      jnp.expand_dims(jnp.array([9]), 0)))[:, :, :, 0]
         de_noise = model.apply(net_state,
                (process_array,
                 jnp.expand_dims(jnp.array(time), -1),
@@ -52,19 +65,31 @@ def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
         process_array = sample_noise(process_array, time, prng_key, max_steps)[0]
     return process_array[0]
 
+
 def sample_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
-                    input_shape: List[int], max_steps: int, test_label: int = 3338) -> Union[np.ndarray, Tuple[np.ndarray, List]]:
+                    input_shape: List[int], max_steps: int, test_label: int = 3338) -> np.ndarray:
+    """DDPM Sampling from https://arxiv.org/pdf/2006.11239.pdf.
+
+    Args:
+        net_state (FrozenDict): Model parameters.
+        model (nn.Module): Model instance.
+        key (int): PRNGKey.
+        input_shape (List[int]): input_shape.
+        max_steps (int): Maximum steps.
+        test_label (int, optional): Test label to sample for class conditioning. Defaults to 3338.
+
+    Returns:
+        np.ndarray: Return the sampled image.
+    """
     if key == -1:
         key = random.randint(0, 50000)
     prng_key = jax.random.PRNGKey(key)
     x_t = jax.random.normal(
         prng_key, shape=[1]+input_shape
     )
-    betas = jnp.linspace(0.0001, 0.02, max_steps)
-    alphas = 1-betas
-    alpha_cumprod = jnp.cumprod(alphas)
     x_t_1 = x_t
     for time in reversed(range(max_steps)):
+        alpha_t, alpha, _ = linear_noise_scheduler(time, max_steps)
         prng_key = jax.random.PRNGKey(random.randint(0, 50000))
         z = jax.random.normal(
             prng_key, shape=[1]+input_shape
@@ -73,9 +98,28 @@ def sample_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
                               (x_t_1,
                                jnp.expand_dims(jnp.array(time), -1),
                                jnp.expand_dims(jnp.array(test_label), 0)))
-        x_mean = (x_t_1  - (denoise *((1-alphas[time])/(jnp.sqrt(1-alpha_cumprod[time])))))/(jnp.sqrt(alphas[time]))
-        x_t_1 = x_mean + jnp.sqrt(1-alphas[time]) * z
+        x_mean = (x_t_1  - (denoise *((1-alpha)/(jnp.sqrt(1-alpha_t)))))/(jnp.sqrt(alpha))
+        x_t_1 = x_mean + jnp.sqrt(1-alpha) * z
     return x_t_1[0]
+
+
+def sample_DDIM(net_state: FrozenDict, model: nn.Module, key: int,
+                input_shape: List[int], max_steps: int, test_label: int = 3338) -> jnp.ndarray:
+    """DDIM Sampling from https://arxiv.org/pdf/2010.02502.pdf.
+
+    Args:
+        net_state (FrozenDict): Model parameters.
+        model (nn.Module): Model instance.
+        key (int): PRNGKey.
+        input_shape (List[int]): input_shape.
+        max_steps (int): Maximum steps.
+        test_label (int, optional): Test label to sample for class conditioning. Defaults to 3338.
+
+    Returns:
+        np.ndarray: Return the sampled image.
+    """
+    raise NotImplementedError
+
 
 def sample_net_test(net_state: FrozenDict, model: nn.Module, key: int,
         test_time_step: int, max_steps: int, data_dir: str):
