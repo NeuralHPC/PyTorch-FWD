@@ -129,7 +129,10 @@ def batch_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
         prng_key, shape=[batch_size]+input_shape
     )
     x_t_1 = x_t
-    for time in reversed(range(max_steps)):
+    # Lazy import
+    from tqdm.auto import tqdm
+    time_indices = tqdm(reversed(range(max_steps)), total=max_steps)
+    for time in time_indices:
         alpha_t, alpha, _ = linear_noise_scheduler(time, max_steps)
         prng_key = jax.random.PRNGKey(random.randint(0, 50000))
         z = jax.random.normal(

@@ -15,12 +15,13 @@ from functools import partial
 from tqdm import tqdm
 from src.fid import inception, fid
 import matplotlib.pyplot as plt
+import time
 
 
 def sample_30K(args, net_state, model, labels):
-    batch_size = 5000 # Reduce this number in case of low memory
+    batch_size = 1000 # Reduce this number in case of low memory
     print(batch_size)
-    base_path = "./sample_imgs"
+    base_path = "sample_imgs"
     os.makedirs(base_path, exist_ok=True)
 
     # inception_model = inception.InceptionV3(pretrained=True)
@@ -53,15 +54,19 @@ def sample_30K(args, net_state, model, labels):
 
     # batch_activations = []
     count = 0
-    for idx in tqdm(range(len(labels)//batch_size)):
+    for idx in range(len(labels)//batch_size):
+        print(f"Index: {idx}")
         lbls = labels[idx*batch_size : (idx+1)*batch_size]
         lbl = jnp.expand_dims(jnp.stack(jnp.split(lbls, gpus)), -1)
+        start = time.time()
         sampled_imgs = sample_partial(test_label=lbl)
+        print(f"Total sampling time for 2 steps: {time.time()-start}")
         sampled_imgs = jnp.reshape(sampled_imgs, (batch_size, args.input_shape, args.input_shape, 3))
-        sampled_imgs = jax.vmap(rescale)(sampled_imgs)
-        fnm = os.path.join(base_path, f"{count:03d}.npz")
+        # sampled_imgs = jax.vmap(rescale)(sampled_imgs)
+        fnm = os.path.join(base_path, f"sampled_imgs_{count}.npz")
         jnp.savez(fnm, imgs=sampled_imgs)
         count += 1
+        ljahbsfkjd
         # acts = fid.compute_sampled_statistics(sampled_imgs,
         #                                     inception_net_state,
         #                                     apply_fn)

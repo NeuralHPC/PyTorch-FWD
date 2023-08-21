@@ -13,8 +13,8 @@ def test_imporv_Unet(input_shape: List):
     """Test UNet from the Improved Denoising Diffusion Probabilistic Models (https://arxiv.org/abs/2102.09672)"""
     model = Improv_UNet(
         out_channels=input_shape[-1],
-        base_channels=128,
-        class_conditional=True,
+        model_channels=128,
+        classes=True,
         channel_mult=(1, 2, 4),
         num_res_blocks=1,
         num_heads=2,
