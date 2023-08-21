@@ -7,6 +7,8 @@ import random
 
 import flax.linen as nn
 from flax.core.frozen_dict import FrozenDict
+from functools import partial
+from src.Improved_UNet.UNet import Improv_UNet
 
 from src.util import get_mnist_test_data
 
@@ -105,9 +107,9 @@ def sample_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
     x_0 = x_t_1 - jnp.sqrt(1-alpha) * z
     return x_0[0], steps
 
-
-def batch_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
-                    input_shape: List[int], max_steps: int, batch_size: int, test_label: List[int]) -> Union[np.ndarray, List[np.ndarray]]:
+def batch_DDPM(net_state: FrozenDict, key: int,
+               input_shape: List[int], max_steps: int,
+               batch_size: int, test_label: List[int]) -> Union[np.ndarray, List[np.ndarray]]:
     """Batch DDPM Sampling from https://arxiv.org/pdf/2006.11239.pdf.
 
     Args:
@@ -122,30 +124,53 @@ def batch_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
     Returns:
         Union[np.ndarray, List[np.ndarray]]: Return sampled image and all the steps.
     """
-    if key == -1:
-        key = random.randint(0, 50000)
-    prng_key = jax.random.PRNGKey(key)
-    x_t = jax.random.normal(
-        prng_key, shape=[batch_size]+input_shape
+    model = Improv_UNet(
+        out_channels=3,
+        model_channels=128,
+        classes=1000
     )
+    x_t = jax.random.normal(
+        key, shape=[batch_size]+input_shape
+    )
+
     x_t_1 = x_t
-    # Lazy import
-    from tqdm.auto import tqdm
-    time_indices = tqdm(reversed(range(max_steps)), total=max_steps)
-    for time in time_indices:
-        alpha_t, alpha, _ = linear_noise_scheduler(time, max_steps)
-        prng_key = jax.random.PRNGKey(random.randint(0, 50000))
+    @jax.jit
+    def get_image(x_t_1):
+        time_indices = reversed(range(max_steps))
+        prng_key = key
+        for time in time_indices:
+            alpha_t, alpha, _ = linear_noise_scheduler(time, max_steps)
+            _, prng_key = jax.random.split(prng_key)
+            z = jax.random.normal(
+                prng_key, shape=[batch_size]+input_shape
+            )
+            denoise = model.apply(net_state,
+                                (x_t_1,
+                                jnp.array([time]*batch_size),
+                                test_label))
+            x_mean = (x_t_1  - (denoise *((1-alpha)/(jnp.sqrt(1-alpha_t)))))/(jnp.sqrt(alpha))
+            x_t_1 = x_mean + jnp.sqrt(1-alpha) * z
+        return x_t_1
+    @jax.jit
+    def fori_image(i, carry):
+        prng_key, x_t_1, time = carry
+        alpha_t, alpha, _ = linear_noise_scheduler(time, 1000)
+        _, prng_key = jax.random.split(prng_key)
         z = jax.random.normal(
             prng_key, shape=[batch_size]+input_shape
         )
         denoise = model.apply(net_state,
-                              (x_t_1,
-                               jnp.array([time]*batch_size),
-                               test_label))
+                            (x_t_1,
+                            jnp.array([time]*batch_size),
+                            test_label))
         x_mean = (x_t_1  - (denoise *((1-alpha)/(jnp.sqrt(1-alpha_t)))))/(jnp.sqrt(alpha))
         x_t_1 = x_mean + jnp.sqrt(1-alpha) * z
-    return x_t_1
-
+        time -= 1
+        return (prng_key, x_t_1, time)
+    time = max_steps
+    _, img, _ = jax.lax.fori_loop(0, max_steps, fori_image, (key, x_t, time))
+    return img
+    # return get_image(x_t_1)
 
 
 def sample_DDIM(net_state: FrozenDict, model: nn.Module, key: int,

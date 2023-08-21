@@ -19,7 +19,7 @@ import time
 
 
 def sample_30K(args, net_state, model, labels):
-    batch_size = 1000 # Reduce this number in case of low memory
+    batch_size = 15000 # Reduce this number in case of low memory
     print(batch_size)
     base_path = "sample_imgs"
     os.makedirs(base_path, exist_ok=True)
@@ -33,10 +33,21 @@ def sample_30K(args, net_state, model, labels):
 
     gpus = args.gpus if args.gpus > 0 else jax.local_device_count()
     # Sample all the images
+    #jit_batch_DDPM = jax.jit(batch_DDPM, static_argnames=['net_state', 'model', 'key', 'input_shape', 
+    #                                                      'max_steps', 'batch_size'])
     sample_partial = jax.pmap(partial(batch_DDPM, 
-                             net_state=net_state, model=model,
-                             key=args.seed, input_shape=[args.input_shape, args.input_shape, 3],
-                             max_steps=args.diff_steps, batch_size=batch_size//gpus), devices=jax.devices()[:gpus])
+                              net_state=net_state,
+                              key = jax.random.PRNGKey(args.seed),
+                              input_shape=[args.input_shape, args.input_shape, 3],
+                              max_steps=args.diff_steps,
+                              batch_size=batch_size//gpus),
+                              devices=jax.devices()[:gpus],
+                             )
+
+    # sample_partial = jax.vmap(partial(batch_DDPM, 
+    #                             net_state=net_state, model=model,
+    #                             key=args.seed, input_shape=[args.input_shape, args.input_shape, 3],
+    #                             max_steps=args.diff_steps, batch_size=batch_size))
 
     def rescale(img):
         img = (img - jnp.min(img))/(jnp.max(img) - jnp.min(img))*255.0
@@ -51,22 +62,20 @@ def sample_30K(args, net_state, model, labels):
     #         plt.savefig(fnm, dpi=600, bbox_inches="tight")
     #         plt.close()
 
-
     # batch_activations = []
     count = 0
     for idx in range(len(labels)//batch_size):
-        print(f"Index: {idx}")
+        print(f"Processing batch: {idx+1}/{len(labels)//batch_size}")
         lbls = labels[idx*batch_size : (idx+1)*batch_size]
         lbl = jnp.expand_dims(jnp.stack(jnp.split(lbls, gpus)), -1)
         start = time.time()
         sampled_imgs = sample_partial(test_label=lbl)
-        print(f"Total sampling time for 2 steps: {time.time()-start}")
+        print(f"Processing time: {time.time()-start}")
         sampled_imgs = jnp.reshape(sampled_imgs, (batch_size, args.input_shape, args.input_shape, 3))
         # sampled_imgs = jax.vmap(rescale)(sampled_imgs)
         fnm = os.path.join(base_path, f"sampled_imgs_{count}.npz")
         jnp.savez(fnm, imgs=sampled_imgs)
         count += 1
-        ljahbsfkjd
         # acts = fid.compute_sampled_statistics(sampled_imgs,
         #                                     inception_net_state,
         #                                     apply_fn)
