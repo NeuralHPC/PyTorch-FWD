@@ -1,24 +1,31 @@
-from typing import List, Union, Tuple
+"""Sample images for CelebAHQ dataset."""
 
 import pickle
 import jax
 import random
 import sys, os
 import jax.numpy as jnp
-import numpy as np
+import argparse
 
 from flax.core.frozen_dict import FrozenDict
 import flax.linen as nn
 from src.sample import sample_DDPM, batch_DDPM
 from src.util import write_movie, _sampler_args, get_label_dict
 from functools import partial
-from tqdm import tqdm
-from src.fid import inception, fid
 import matplotlib.pyplot as plt
 import time
 
 
-def sample_30K(args, net_state, model, labels):
+def sample_30K(args: argparse.Namespace, net_state: FrozenDict,
+               model: nn.Module, labels: jnp.ndarray) -> None:
+    """Sample 30000 images for CelebAHQ dataset.
+
+    Args:
+        args (argparse.Namespace): Argument Parser
+        net_state (FrozenDict): Model parameters
+        model (nn.Module): Model instance
+        labels (jnp.ndarray): Array of labels
+    """
     batch_size = 15000 # Reduce this number in case of low memory
     base_path = "sample_imgs"
     os.makedirs(base_path, exist_ok=True)
@@ -80,5 +87,5 @@ if __name__ == "__main__":
 
         write_movie([s[0] for s in steps], xlim=1, ylim=1)
         sys.exit("Writing complete")
-    
+
     sample_30K(args, net_state, model, labels)
