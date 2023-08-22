@@ -97,7 +97,7 @@ def _sampler_args():
     parser.add_argument(
         "--seed",
         type=int,
-        default=-1,
+        default=42,
         help="Seed value"
     )
     parser.add_argument(

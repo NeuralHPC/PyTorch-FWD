@@ -10,7 +10,7 @@ from tqdm import tqdm
 """ Code taken from https://github.com/matthias-wright/jax-fid/blob/main/jax_fid/fid.py
 """
 
-def compute_statistics(path, params, apply_fn, batch_size=1, img_size=None):
+def compute_statistics(path, params, apply_fn, batch_size, img_size=None):
     if path.endswith(".npz"):
         stats = np.load(path)
         mu, sigma = stats["mu"], stats["sigma"]
@@ -83,9 +83,9 @@ def compute_sampled_statistics(batched_images, net_state, apply_fn, img_size=256
     def resize_imgs(imgs):
         rs_imgs = []
         for img in imgs:
-            img = Image.fromarray(np.array(img), 'RGB')
-            img = img.resize((img_size, img_size), Image.Resampling.LANCZOS)
-            rs_imgs.append(jnp.asarray(img))
+            img = Image.fromarray(np.array(img))
+            img = img.resize((img_size, img_size), Image.BILINEAR)
+            rs_imgs.append(jnp.asarray(img)/255.0)
         rs_imgs = jnp.stack(rs_imgs, axis=0)
         return rs_imgs
     x = resize_imgs(batched_images)

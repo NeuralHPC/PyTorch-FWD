@@ -43,8 +43,8 @@ parser.add_argument(
 )
 if __name__ == '__main__':
     args = parser.parse_args()
-    fname = f'data/CelebAHQ/stats_{args.input_size}x{args.input_size}.npz'
-    sample_stats_fname = os.path.join(args.sample_dir, f"stats_{args.input_size}x{args.input_size}.npz")
+    fname = f'data/CelebAHQ/stats_{args.input_size}x{args.input_size}_original.npz'
+    sample_stats_fname = os.path.join(args.sample_dir, f"stats_{args.input_size}x{args.input_size}_sampled.npz")
     batch_size = args.batch_size
 
     model = inception.InceptionV3(pretrained=True)
@@ -82,7 +82,7 @@ if __name__ == '__main__':
         batch_activations = []
         for idx in tqdm(range(len(sampled_imgs)//batch_size)):
             batch_imgs = sampled_imgs[idx*batch_size : (idx+1)*batch_size, :, :, :]
-            acts = fid.compute_sampled_statistics(sampled_imgs, net_state, apply_fn)
+            acts = fid.compute_sampled_statistics(batch_imgs, net_state, apply_fn)
             batch_activations.append(acts)
         batch_activations = jnp.concatenate(batch_activations, axis=0)
         mu_sampled = jnp.mean(batch_activations, axis=0)
@@ -90,10 +90,10 @@ if __name__ == '__main__':
         jnp.savez(sample_stats_fname, mu=mu_sampled, sigma=sigma_sampled)
     else:
         print("Found mean and variance for sampled data, loading...")
-        with jnp.load(fname) as data:
+        with jnp.load(sample_stats_fname) as data:
             mu_sampled = data['mu']
             sigma_sampled = data['sigma']
 
     print("Computing the FID...")
-    fid_score = fid.compute_frechet_distance(mu1, mu2, sigma1, sigma2, eps=1e-6)
+    fid_score = fid.compute_frechet_distance(mu_orig, mu_sampled, sigma_orig, sigma_sampled, eps=1e-6)
     print(f'Fid Score: {fid_score}')

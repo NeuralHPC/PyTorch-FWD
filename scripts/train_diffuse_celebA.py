@@ -70,7 +70,7 @@ def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
         
     seed = 6
-    test_image = sample_DDPM(net_state, model, seed, input_shape, time_steps)
+    test_image, _ = sample_DDPM(net_state, model, seed, input_shape, time_steps)
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
     for test_time in time_steps_list:
