@@ -145,7 +145,7 @@ def main():
     # model = UNet(output_channels=input_shape[-1])
     model = Improv_UNet(
         out_channels=input_shape[-1],
-        model_channels=args.base_channels,
+        base_channels=args.base_channels,
         classes=args.conditional,
         channel_mult=tuple(channel_mult),
         num_res_blocks=args.num_res_blocks,
