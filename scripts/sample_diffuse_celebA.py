@@ -49,9 +49,7 @@ def sample_30K(args, net_state, model, labels):
     #                             key=args.seed, input_shape=[args.input_shape, args.input_shape, 3],
     #                             max_steps=args.diff_steps, batch_size=batch_size))
 
-    def rescale(img):
-        img = (img - jnp.min(img))/(jnp.max(img) - jnp.min(img))*255.0
-        return img.astype(jnp.uint8)
+    
     
     # def save_fig(imgs, count):
     #     for num, img in enumerate(imgs):
