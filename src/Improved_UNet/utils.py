@@ -13,16 +13,16 @@ class ResBlock(nn.Module):
     def __call__(self, x: jnp.ndarray, emb: jnp.ndarray) -> jnp.ndarray:
         in_layers = nn.Sequential([
             nn.GroupNorm(),
-            nn.silu,
+            nn.swish,
             nn.Conv(self.out_channels, [3, 3], padding='SAME')
         ])
         emd_layers = nn.Sequential([
-            nn.silu,
+            nn.swish,
             nn.Dense(2 * self.out_channels if self.use_scale_shift_norm else self.out_channels) # is scale_shift_norm necesarry?
         ])
         out_layers = [
             nn.GroupNorm(),
-            nn.silu,
+            nn.swish,
             # Dropped the dropout layer here - if necessary add later
             nn.Conv(self.out_channels, [3, 3], padding="SAME") # Torch has these params zeroed out and detached - if necessary add later
         ]
@@ -51,7 +51,7 @@ class UPSample(nn.Module):
     out_channels: int
 
     @nn.compact
-    def __call__(self, x: jnp.ndarray, emb: jnp.array=None) -> jnp.ndarray:
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
         B, H, W, C = x.shape
         x = jax.image.resize(x, (B, H * 2, W * 2, C), 'nearest')
         return nn.Conv(self.out_channels, [3, 3], padding="SAME")(x)
