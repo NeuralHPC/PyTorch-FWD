@@ -55,7 +55,7 @@ def _parse_args():
         "--resize", type=int, default=64, help="Resize the input image"
     )
     parser.add_argument(
-        "--channel_mult", type=str, default="1,2,2,4", help="Channel multiplier for the UNet"
+        "--channel-mult", type=str, default="1,2,2,4", help="Channel multiplier for the UNet"
     )
     parser.add_argument(
         "--num-res-blocks", type=int, default=2, help="Number of residual blocks for the model"
