@@ -89,7 +89,8 @@ def sample_DDPM(net_state: FrozenDict, model: nn.Module, key: int,
     )
     x_t_1 = x_t
     steps = [x_t_1]
-    for time in reversed(range(max_steps)):
+    from tqdm.auto import tqdm
+    for time in tqdm(reversed(range(max_steps)), total=max_steps):
         alpha_t, alpha, _ = linear_noise_scheduler(time, max_steps)
         _, prng_key = jax.random.split(prng_key)
         z = jax.random.normal(
@@ -189,10 +190,12 @@ def sample_DDIM(net_state: FrozenDict, model: nn.Module, key: int,
         prng_key, shape=[1]+input_shape
     )
     x_t_1 = x_t
+    train_steps = 1000
     steps = [x_t_1]
-    for time in reversed(range(max_steps, steps=tau_steps)):
-        _, alpha_t, _ = linear_noise_scheduler(time, max_steps)
-        _, alpha_t_1, _ = linear_noise_scheduler(time-1, max_steps)
+    from tqdm.auto import tqdm
+    for time in tqdm(reversed(range(0, max_steps, tau_steps)), total=max_steps//tau_steps):
+        _, alpha_t, _ = linear_noise_scheduler(time, train_steps)
+        _, alpha_t_1, _ = linear_noise_scheduler(time-1, train_steps)
         sigma_t = eta*((jnp.sqrt((1-alpha_t_1)/(1-alpha_t)))*(jnp.sqrt((1-alpha_t)/(alpha_t_1))))
         _, prng_key = jax.random.split(prng_key)
         z = jax.random.normal(
@@ -208,6 +211,27 @@ def sample_DDIM(net_state: FrozenDict, model: nn.Module, key: int,
         x_t_1 = x_mean
         steps.append(x_t_1)
     return x_t_1[0], steps
+
+
+def batch_DDIM(net_state: FrozenDict, model: nn.Module, key: int,
+                input_shape: List[int], max_steps: int, 
+                test_label: int = 3338, eta: float = 0., tau_steps: int = 3) -> jnp.ndarray:
+    """DDIM Sampling from https://arxiv.org/pdf/2010.02502.pdf.
+
+    Args:
+        net_state (FrozenDict): Model parameters.
+        model (nn.Module): Model instance.
+        key (int): PRNGKey.
+        input_shape (List[int]): input_shape.
+        max_steps (int): Maximum steps.
+        test_label (int, optional): Test labels to sample for class conditioning.
+        eta (float, optional): Eta for sigma calculation. Defaults to 0.0.
+        tau_steps (int, optional): Tau steps for the DDIM. Defaults to 3.
+
+    Returns:
+        np.ndarray: Return the sampled image.
+    """
+    raise NotImplementedError
 
 
 def sample_net_test(net_state: FrozenDict, model: nn.Module, key: int,

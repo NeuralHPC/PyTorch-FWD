@@ -114,6 +114,11 @@ def _sampler_args():
     parser.add_argument(
         "--gpus", type=int, default=-1, help="set gpu no by hand. Use all if -1 (default)."
     )
+    parser.add_argument(
+        "--use-DDIM",
+        action='store_true',
+        help='Use DDIM Sampling else DDPM is used by default'
+    )
     return parser.parse_args()
 
 
