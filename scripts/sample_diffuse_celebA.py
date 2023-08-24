@@ -34,11 +34,12 @@ def sample_30K(args: argparse.Namespace, net_state: FrozenDict,
     if args.use_DDIM:
         sample_fn = batch_DDIM
 
+    print(f"Using sampling function: {sample_fn}")
     gpus = args.gpus if args.gpus > 0 else jax.local_device_count()
     sample_partial = jax.pmap(partial(sample_fn, 
                               net_state=net_state,
                               model=model,
-                              key=jax.random.PRNGKey(args.seed),
+                              key=args.seed,
                               input_shape=[args.input_shape, args.input_shape, 3],
                               max_steps=args.diff_steps,
                               batch_size=batch_size//gpus),
