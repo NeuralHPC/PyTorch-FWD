@@ -34,7 +34,7 @@ def sample_30K(args: argparse.Namespace, net_state: FrozenDict,
     sample_partial = jax.pmap(partial(batch_DDPM, 
                               net_state=net_state,
                               model=model,
-                              key=jax.random.PRNGKey(args.seed),
+                              key=args.seed,
                               input_shape=[args.input_shape, args.input_shape, 3],
                               max_steps=args.diff_steps,
                               batch_size=batch_size//gpus),
@@ -60,6 +60,7 @@ def sample_30K(args: argparse.Namespace, net_state: FrozenDict,
 
 if __name__ == "__main__":
     args = _sampler_args()
+    print(args)
     with open(args.ckpt_path, "rb") as fp:
         loaded = pickle.load(fp)
    
