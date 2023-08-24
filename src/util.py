@@ -1,16 +1,17 @@
 from typing import Tuple, List, Optional, Dict
 from concurrent.futures import ThreadPoolExecutor
 
-from glob import glob
 import argparse
-import jax
 import struct
 import numpy as np
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import matplotlib.animation as manimation
-import pandas as pd
 import os
+import json
+import pickle
+import datetime
+from flax.core.frozen_dict import FrozenDict
+
 
 from PIL import Image
 
@@ -32,8 +33,8 @@ def _parse_args():
     parser.add_argument(
         "--learning-rate",
         type=float,
-        default=1e-3,
-        help="learning rate for optimizer (default: 1e-3)",
+        default=1e-4,
+        help="learning rate for optimizer (default: 1e-4)",
     )
     parser.add_argument(
         "--epochs", type=int, default=51, help="number of epochs (default: 21)"
@@ -57,7 +58,70 @@ def _parse_args():
         "--data-dir", required=True, help="Base dataset path"
     )
     parser.add_argument(
+        "--resize", type=int, default=64, help="Resize the input image"
+    )
+    parser.add_argument(
+        "--channel-mult", type=str, default="1,2,2,4", help="Channel multiplier for the UNet"
+    )
+    parser.add_argument(
+        "--num-res-blocks", type=int, default=2, help="Number of residual blocks for the model"
+    )
+    parser.add_argument(
+        "--conditional", action="store_false", help="Add the class condition to model"
+    )
+    parser.add_argument(
+        "--attn-heads", type=int, default=4, help="Number of attention heads"
+    )
+    parser.add_argument(
+        "--attn-heads-upsample", type=int, default=-1, help="Number of attention heads during upsample"
+    )
+    parser.add_argument(
+        "--attn-resolution", type=str, default="16,8", help="Resolutions at which attention should be applied"
+    )
+    parser.add_argument(
+        "--base-channels", type=int, default=128, help="Base channels for the UNet to start with"
+    )
+    parser.add_argument(
         "--wavelet-loss", help="Use wavelets fix high frequency artifacts.", action='store_true'
+    )
+    return parser.parse_args()
+
+
+def _sampler_args():
+    parser = argparse.ArgumentParser(
+    prog="Image sampler",
+    description="Sample Images from the diffusion model"
+    )
+    parser.add_argument(
+        "--ckpt-path",
+        required=True,
+        help="Checkpoint path"
+    )
+    parser.add_argument(
+        "--input-shape",
+        type=int,
+        required=True,
+        help="Sampled input shape"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Seed value"
+    )
+    parser.add_argument(
+        "--diff-steps",
+        type=int,
+        default=40,
+        help="Number of diffusion steps"
+    )
+    parser.add_argument(
+        "--gif",
+        action="store_true",
+        help="Store diffusion process as a GIF"
+    )
+    parser.add_argument(
+        "--gpus", type=int, default=-1, help="set gpu no by hand. Use all if -1 (default)."
     )
     return parser.parse_args()
 
@@ -106,22 +170,20 @@ def get_mnist_train_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     return img_data_train, lbl_data_train
 
 
+def get_batched_celebA_paths(data_dir: str, batch_size: int = 50) -> Tuple[List[np.ndarray], Dict[str, int]]:
+    """Split images to batches for CelebAHQ dataset.
 
-def get_batched_celebA_paths(data_dir: str, batch_size: int = 50, split: str = 'train') -> List[np.ndarray]:
-    # img_folder_path = '/home/wolter/uni/diffusion/data/celebA/CelebA/Img/img_align_celeba_png/img_align_celeba_png'
-    img_folder_path = os.path.join(data_dir, 'Img/img_align_celeba/')
-    # partition_list = '/home/wolter/uni/diffusion/data/celebA/CelebA/Eval/list_eval_partition.txt'
-    partition_path = os.path.join(data_dir, 'Eval/list_eval_partition.txt')
-    labels_path = os.path.join(data_dir, 'Anno/identity_CelebA.txt')
-    partition_df = pd.read_csv(partition_path, names=['images', 'split'], sep=' ')
+    Args:
+        data_dir (str): Data root directory
+        batch_size (int, optional): Batch size. Defaults to 50.
 
-    split_val = 0
-    if split == 'validation':
-        split_val = 1
+    Returns:
+        Tuple[List[np.ndarray], Dict[str, str]]: A tuple containing list of batched image names and labels
+    """
+    img_folder_path = data_dir
+    labels_path = "./data/CelebAHQ/identity_CelebAHQ.txt"
 
-    image_names = []
-    image_names = partition_df[partition_df['split'] == split_val]['images']
-    image_names = [image_name.split('.')[0] + ".jpg" for image_name in image_names]
+    image_names = os.listdir(img_folder_path)
     image_path_list_array = np.array([os.path.join(img_folder_path, image_name) for image_name in image_names])
     
     image_count = len(image_path_list_array)
@@ -131,30 +193,43 @@ def get_batched_celebA_paths(data_dir: str, batch_size: int = 50, split: str = '
     return image_path_batches, labels_dict
 
 
-
 def get_label_dict(path: str) -> Dict[str, int]:
-    # '/home/wolter/uni/diffusion/data/celebA/CelebA/Anno/identity_CelebA.txt'
-    labels_dict = {}
-    with open(path, 'r') as fp:
-        for line in fp:
-            line = line.replace('\n', '')
-            key, value = line.split(' ')
-            key = key.split('.')[0]
-            labels_dict[key] = int(value)
-    return labels_dict
+    """Load the labels form the given path.
+
+    Args:
+        path (str): Labels directory
+
+    Returns:
+        Dict[str, int]: A dictionary containing image name with label
+    """
+    hq_labels = json.load(open(path, "r"))
+    for key, value in hq_labels.items():
+        value = int(value.replace("\n", ""))
+        hq_labels[key] = value
+    return hq_labels
 
 
 def batch_loader(batch_array: np.ndarray, labels_dict: Dict[str, int],
-                 resize: Tuple[int, int] = (128, 128)) -> np.ndarray:
-    # load a single image batch into memory.
+                 resize: Tuple[int, int] = None) -> np.ndarray:
+    """Load image batch to memory.
+
+    Args:
+        batch_array (np.ndarray): List of image name.
+        labels_dict (Dict[str, int]): A dictionary containing labels
+        resize (Tuple[int, int], optional): Resize the image if required. Defaults to None.
+
+    Returns:
+        np.ndarray: Array of images.
+    """
 
     def load(path: str) -> np.ndarray:
         img = Image.open(path)
-        img = img.resize(resize, Image.Resampling.LANCZOS)
+        if resize:
+            img = img.resize(resize, Image.Resampling.LANCZOS)
         return img
 
     def label(path: str) -> np.ndarray:
-        img_name = path.split("/")[-1].split(".")[0]
+        img_name = path.split("/")[-1]
         return labels_dict[img_name]
 
     with ThreadPoolExecutor(max_workers=8) as p:
@@ -168,7 +243,6 @@ def multi_batch_loader(batch_list):
     with ThreadPoolExecutor() as p:
         batches = p.map(batch_loader, batch_list, chunksize=10)
     return batches
-
 
 
 def write_movie(
@@ -200,7 +274,7 @@ def write_movie(
     metadata = dict(
         title="Diffusion", artist="Matplotlib", comment="Diffusion movie!"
     )
-    writer = ffmpeg_writer(fps=3, metadata=metadata)
+    writer = ffmpeg_writer(fps=60, metadata=metadata)
 
     fig = plt.figure()
     l = plt.imshow(images[0]/np.max(np.abs(images[0])))
@@ -214,3 +288,18 @@ def write_movie(
             l.set_data(img/np.max(np.abs(img)))
             writer.grab_frame()
 
+def _save_model(checkpoint_dir: str,
+                time: datetime.datetime,
+                epochs: int,
+                model_data: Tuple[FrozenDict]) -> None:
+    """Save the model parameters
+
+    Args:
+        checkpoint_dir (str): Checkpoint directory
+        time (datetime.datetime): Time of saving
+        epochs (int): Epoch of saving
+        model_data (Tuple[FrozenDict]): Tuple containing the model data
+    """
+    save_dir = os.path.join(checkpoint_dir, f"e_{epochs}_time_{time}.pkl")
+    with open(save_dir, "wb") as fp:
+        pickle.dump(model_data, fp)

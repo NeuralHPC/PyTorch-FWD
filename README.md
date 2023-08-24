@@ -6,18 +6,33 @@ Along with the requirements.txt please install jax corresponding to local cuda v
 
 # Dataset:
 Steps:
-1. Navigate to the [official drive link](https://drive.google.com/drive/folders/0B7EVK8r0v71pWEZsZE9oNnFzTm8?resourcekey=0-5BR16BdXnb8hVj6CNHKzLg) or the [website](https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html).
-2. Download and extract img_align_celeba.zip from Img folder.
-3. Then download list_eval_partition.txt from Eval and finally download labels file (identity_CelebA.txt) from Anno folder.
-4. Please provide paths to corresponding variables in src/util.py functions get_batched_celebA_paths and batch_loader.
+1. Download the CelebA-HQ dataset (e.g., from here: https://github.com/suvojit-0x55aa/celebA-HQ-dataset-download)
+2. Please provide paths the extracted dataset path to data-dir argument
 
-# Training
+# Training and sampling
 
 To run Diffusion on MNIST
 ```
-PYTHONPATH=. python scripts/train_diffuse_mnist.py --batch-size 100 --seed 42 --epochs 400 --data_dir <path to data>
+PYTHONPATH=. python scripts/train_diffuse_mnist.py --batch-size 100 --seed 42 --epochs 400 --data-dir <path to data>
 ```
-Diffusion on CelebA
+Diffusion on CelebAHQ
 ```
-PYTHONPATH=. python scripts/train_diffuse_celebA.py --batch-size 10 --seed 42 --epochs 200 --data_dir <path to data>
+PYTHONPATH=. python scripts/train_diffuse_celebA.py --batch-size 10 --seed 42 --epochs 200 --data-dir <path to data>
+```
+Sampling on CelebAHQ
+```
+PYTHONPATH=. python scripts/sample_diffuse_celebA.py --ckpt-path <checkpoint_path> --input-shape <64>
+```
+for input_shape argument please provide either height or width of the image. Currently only supports square images.<br>
+if no seed was given, a random seed is selected. To provide seed use ```--args.seed <seed>```.<br>
+Add ```--gif``` to the above command for visualizing the diffusion steps of one random label.
+This script saves the mean and variance of InceptionV3 activations for the sampled images.
+
+# Hyperparameters
+Hyperparameters can be found in [here](hyperparams.md).
+
+# FID
+Computing the FID
+```
+PYTHONPATH=. python scripts/compute_fid.py --data-dir <dataset_path> --input-size <64> --sample-sir <sampled_activations>
 ```
