@@ -62,7 +62,7 @@ class AttentionBlock(nn.Module):
     num_heads: int = 1
 
     @nn.compact
-    def __call__(self, x) -> Any:
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
         B, H, W, C = x.shape
         # x = jnp.reshape(x, (B, C, -1))
         x = nn.GroupNorm()(x)

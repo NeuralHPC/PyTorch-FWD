@@ -1,6 +1,6 @@
+"""Train diffusion model for CelebAHQ dataset."""
+
 import datetime
-import pickle
-from typing import List, Dict
 from functools import partial
 from multiprocess import Pool
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -17,14 +17,10 @@ import flax.linen as nn
 from flax.core.frozen_dict import FrozenDict
 
 import numpy as np
-import matplotlib.pyplot as plt
-
 
 from src.util import _parse_args, get_batched_celebA_paths, batch_loader, _save_model
-# from src.networks import UNet
 from src.Improved_UNet.UNet import Improv_UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA, sample_DDPM
-
 
 
 @partial(jax.jit, static_argnames=['model'])
@@ -32,6 +28,7 @@ def diff_step(net_state, x, y, labels, time, model):
     denoise = model.apply(net_state, (x, time, labels))
     cost = jnp.mean(0.5 * (y - denoise) ** 2)
     return cost
+
 
 diff_step_grad = jax.value_and_grad(diff_step, argnums=0)
 
@@ -45,7 +42,6 @@ def train_step(batch: jnp.ndarray,
     
     current_step_array = jax.random.randint(
         key, shape=[batch.shape[0]], minval=1, maxval=time_steps)
-    # current_step_array = jnp.expand_dims(current_step_array, -1)
     seed_array = jax.random.split(key, batch.shape[0])
     batch_map = jax.vmap(partial(sample_noise, max_steps=time_steps))
     x, y = batch_map(batch, current_step_array, seed_array)
@@ -59,11 +55,10 @@ def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
     seed = 5
     time_steps = 100
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
-    # time_steps_list = [1, time_steps//4, time_steps//2]
     time_steps_list = [1, 10, 25, 50]
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
-    # step tests
+
     for test_time in time_steps_list:
         test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps, test_data)
         writer.write_images(e, {f'test_{test_time}_{seed}': test_image})
@@ -94,7 +89,6 @@ def norm_and_split(img: jnp.ndarray,
     lbls = jnp.stack(jnp.split(lbl, gpus))
     print(f"input shape: {img_norm.shape}")
     return img_norm, lbls
-
 
 
 def main():
@@ -151,7 +145,7 @@ def main():
     # model = UNet(output_channels=input_shape[-1])
     model = Improv_UNet(
         out_channels=input_shape[-1],
-        model_channels=args.base_channels,
+        base_channels=args.base_channels,
         classes=args.conditional,
         channel_mult=tuple(channel_mult),
         num_res_blocks=args.num_res_blocks,

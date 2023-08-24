@@ -1,7 +1,7 @@
 """UNet stated in Improved Denoising Diffusion Probabilistic Models (https://arxiv.org/abs/2102.09672)"""
 from typing import Tuple
 
-import math, jax
+import math
 import jax.numpy as jnp
 import flax.linen as nn
 from src.Improved_UNet.utils import ResBlock, UPSample, AttentionBlock

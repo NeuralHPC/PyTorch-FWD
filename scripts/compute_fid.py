@@ -5,7 +5,6 @@ import argparse
 import os
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
 from src.fid import inception, fid
 from functools import partial
 import numpy as np
@@ -13,7 +12,15 @@ import glob
 from tqdm import tqdm
 
 
-def rescale(img):
+def rescale(img: jnp.ndarray) -> jnp.ndarray:
+    """Rescale the image from 0 to 1.
+
+    Args:
+        img (jnp.ndarray): Unscaled image
+
+    Returns:
+        jnp.ndarray: Rescaled image
+    """
     img = (img - jnp.min(img))/(jnp.max(img) - jnp.min(img))*255.0
     return img.astype(jnp.uint8)
 
@@ -76,14 +83,16 @@ if __name__ == '__main__':
         for npz_file in glob.glob(os.path.join(args.sample_dir, "sampled_imgs_*.npz")):
             with jnp.load(npz_file) as imgs:
                 sampled_imgs.append(imgs['imgs'])
+
         sampled_imgs = jnp.concatenate(sampled_imgs, axis=0)
         sampled_imgs = jax.vmap(rescale)(sampled_imgs)
-        
+
         batch_activations = []
         for idx in tqdm(range(len(sampled_imgs)//batch_size)):
             batch_imgs = sampled_imgs[idx*batch_size : (idx+1)*batch_size, :, :, :]
             acts = fid.compute_sampled_statistics(batch_imgs, net_state, apply_fn)
             batch_activations.append(acts)
+
         batch_activations = jnp.concatenate(batch_activations, axis=0)
         mu_sampled = jnp.mean(batch_activations, axis=0)
         sigma_sampled = jnp.cov(batch_activations, rowvar=False)
