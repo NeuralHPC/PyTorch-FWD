@@ -30,12 +30,18 @@ def diff_step(net_state, x, y, labels, time, model):
     denoise = model.apply(net_state, (x, time, labels))
     pixel_mse_cost = jnp.mean(0.5 * (y - denoise) ** 2)
 
-    y_packets = forward_wavelet_packet_transform(y)
-    net_packets = forward_wavelet_packet_transform(denoise)
+    def packet_norm(packs):
+        max_vals = jnp.max(abs(packs), axis=(0,1))
+        packs /= max_vals
+        return packs
+    
+    y_packets = packet_norm(forward_wavelet_packet_transform(y))
+    net_packets = packet_norm(forward_wavelet_packet_transform(denoise))
+
     packet_mse_cost = jnp.mean(0.5 * (y_packets - net_packets) ** 2)
 
     if global_use_wavelet_cost:
-        cost = packet_mse_cost
+        cost = 0.7 * pixel_mse_cost + 0.3 * packet_mse_cost
     else:
         cost = pixel_mse_cost
 
@@ -118,7 +124,7 @@ def main():
     if not os.path.exists(args.logdir):
         os.makedirs(args.logdir)
 
-    writer = metric_writers.create_default_writer(args.logdir + f"/{now}")
+    writer = metric_writers.create_default_writer(args.logdir + f"/weighted_pixel_packetnorm_{now}")
     checkpoint_dir = os.path.join(args.logdir, 'checkpoints')
     os.makedirs(checkpoint_dir, exist_ok=True)
 
