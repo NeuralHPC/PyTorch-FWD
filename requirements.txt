@@ -4,4 +4,3 @@ matplotlib
 clu
 tensorflow-cpu
 multiprocess
-jax-fid

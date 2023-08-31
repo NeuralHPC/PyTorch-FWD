@@ -167,3 +167,4 @@ cython_debug/
 *.gif
 sample_imgs/
 *.npz
+final_img.png

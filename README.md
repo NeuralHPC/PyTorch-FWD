@@ -28,6 +28,8 @@ if no seed was given, a random seed is selected. To provide seed use ```--args.s
 Add ```--gif``` to the above command for visualizing the diffusion steps of one random label.
 This script saves the mean and variance of InceptionV3 activations for the sampled images.
 
+# Hyperparameters
+Hyperparameters can be found in [here](hyperparams.md).
 
 # FID
 Computing the FID
