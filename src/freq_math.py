@@ -168,6 +168,11 @@ def power_divergence(output: jnp.ndarray, target: jnp.ndarray) -> jnp.array:
     Returns:
         (jnp.ndarray): A scalar metric.
     """
-    output_power = jnp.fft.fft2(output)**2
-    target_power = jnp.fft.fft2(target)**2
-    return optax.convex_kl_divergence(jnp.log(output_power), target_power)
+
+    radius_no_sqrt = lambda z_comp: jnp.real(z_comp)**2 + jnp.imag(z_comp)**2
+
+    output_fft = jnp.fft.fft2(output)
+    output_power = radius_no_sqrt(output_fft)
+    target_fft = jnp.fft.fft2(target)
+    target_power = radius_no_sqrt(target_fft)
+    return jnp.mean(optax.convex_kl_divergence(jnp.log(output_power), target_power))
