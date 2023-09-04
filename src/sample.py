@@ -11,6 +11,7 @@ from functools import partial
 from src.Improved_UNet.UNet import Improv_UNet
 
 from src.util import get_mnist_test_data
+from src.freq_math import power_divergence
 
 
 def linear_noise_scheduler(current_time_step: int, max_steps: int) -> Tuple[jnp.ndarray]:
@@ -47,12 +48,30 @@ def sample_noise(img: jnp.ndarray,
     alpha_t, _, _ = linear_noise_scheduler(current_time_step, max_steps)
     noise = jax.random.normal(
             key, shape=img.shape)
-    x = jnp.sqrt(alpha_t)*img + jnp.sqrt(1-alpha_t )*noise
+    x = jnp.sqrt(alpha_t)*img + jnp.sqrt(1 - alpha_t )*noise
     return x, noise
 
 
+def linear_alpha(current_step: int, max_steps: int) -> float:
+    return current_step/max_steps
+
+
+def sample_noise_simple(img: jnp.ndarray,
+                 current_time_step: int,
+                 key: jnp.ndarray,
+                 max_steps: int,
+                 alpha_function: callable = linear_alpha):
+    alpha = alpha_function(current_time_step, max_steps)
+    noise = jax.random.normal(
+            key, shape=img.shape)
+    x = (1-alpha)*img + noise * alpha
+    return x, img - x
+
+
+
 def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
-         input_shape: List[int], max_steps: int):
+         input_shape: List[int], max_steps: int, label: int=3338,
+         sampling_function: callable=sample_noise):
     prng_key = jax.random.PRNGKey(key)
     process_array = jax.random.normal(
             prng_key, shape=[1] + input_shape)
@@ -61,10 +80,14 @@ def sample_net_noise(net_state: FrozenDict, model: nn.Module, key: int,
         de_noise = model.apply(net_state,
                (process_array,
                 jnp.expand_dims(jnp.array(time), -1),
-                jnp.expand_dims(jnp.array([3338]), 0)))
-        process_array -= de_noise
+                jnp.expand_dims(jnp.array([label]), 0)))
+        if sampling_function == sample_noise_simple:
+            process_array += de_noise
+        else:
+            process_array -= de_noise
+
         prng_key = jax.random.split(prng_key, 1)[0]
-        process_array = sample_noise(process_array, time, prng_key, max_steps)[0]
+        process_array = sampling_function(process_array, time, prng_key, max_steps)[0]
     return process_array[0]
 
 
@@ -185,21 +208,23 @@ def sample_DDIM(net_state: FrozenDict, model: nn.Module, key: int,
 
 
 def sample_net_test(net_state: FrozenDict, model: nn.Module, key: int,
-        test_time_step: int, max_steps: int, data_dir: str):
+        test_time_step: int, max_steps: int, data_dir: str,
+        sampling_function: callable=sample_noise):
     test_img, test_lbl = get_mnist_test_data(data_dir)
     test_img, test_lbl = test_img[:5], test_lbl[:5]
     test_img = jnp.expand_dims(test_img, -1)
     test_img = test_img/255.
     key = jax.random.PRNGKey(key)
-    x, y = sample_noise(test_img, test_time_step, key, max_steps)
+    x, y = sampling_function(test_img, test_time_step, key, max_steps)
     yhat = model.apply(net_state, (
         x,
         jnp.expand_dims(jnp.array(test_time_step), -1),
         jnp.expand_dims(test_lbl, -1)))
     rec = x + yhat
-    rec_mse = jnp.mean(rec**2)
-    noise_mse = jnp.mean((y-yhat)**2)
-    return rec, rec_mse, noise_mse
+    rec_mse = jnp.mean((rec - test_img)**2)
+    noise_mse = jnp.mean((y - yhat)**2)
+    power_divergence_test = power_divergence(rec, test_img)
+    return rec, rec_mse, noise_mse, power_divergence_test
 
 
 def sample_net_test_celebA(net_state: FrozenDict, model: nn.Module, key:int,

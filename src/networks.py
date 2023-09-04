@@ -108,3 +108,7 @@ class UNet(nn.Module):
         y = nn.Conv(
             features=self.output_channels, kernel_size=(1, 1), padding="SAME")(x14)
         return y
+
+
+#class Packetformer(nn.module):
+#    pass

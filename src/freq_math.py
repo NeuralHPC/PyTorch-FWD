@@ -6,7 +6,7 @@ import pywt
 import jaxwt as jwt
 import jax.numpy as jnp
 import numpy as np
-import scipy
+import optax
 
 def get_freq_order(level: int):
     """Get the frequency order for a given packet decomposition level.
@@ -155,3 +155,24 @@ def inverse_wavelet_packet_transform(packet_array: jnp.array, wavelet: str, max_
             rec = np.squeeze(rec, 1)
             wp_dict[node] = rec
     return rec
+
+
+def power_divergence(output: jnp.ndarray, target: jnp.ndarray) -> jnp.array:
+    """Power spectrum entropy metric as presented in:
+    https://openaccess.thecvf.com/content_ICCV_2019/papers/Hernandez_Human_Motion_Prediction_via_Spatio-Temporal_Inpainting_ICCV_2019_paper.pdf
+
+    Args:
+        output (jnp.ndarray): The network output.
+        target (jnp.ndarray): The target image.
+
+    Returns:
+        (jnp.ndarray): A scalar metric.
+    """
+
+    radius_no_sqrt = lambda z_comp: jnp.real(z_comp)**2 + jnp.imag(z_comp)**2
+
+    output_fft = jnp.fft.fft2(output)
+    output_power = radius_no_sqrt(output_fft)
+    target_fft = jnp.fft.fft2(target)
+    target_power = radius_no_sqrt(target_fft)
+    return jnp.mean(optax.convex_kl_divergence(jnp.log(output_power), target_power))

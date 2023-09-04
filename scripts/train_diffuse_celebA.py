@@ -10,7 +10,6 @@ from clu import metric_writers, parameter_overview
 import jax
 import jax.numpy as jnp
 import optax
-import flax
 import flax.linen as nn
 from flax.core.frozen_dict import FrozenDict
 
