@@ -25,13 +25,19 @@ def _parse_args():
         help="input batch size for testing (default: 50)",
     )
     parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=16,
+        help="the number of data loading workers.",
+    )
+    parser.add_argument(
         "--learning-rate",
         type=float,
         default=1e-4,
         help="learning rate for optimizer (default: 1e-4)",
     )
     parser.add_argument(
-        "--epochs", type=int, default=21, help="number of epochs (default: 21)"
+        "--epochs", type=int, default=51, help="number of epochs (default: 21)"
     )
     parser.add_argument(
         "--seed", type=int, default=42, help="initial seed value (default:42)"
@@ -74,6 +80,9 @@ def _parse_args():
     )
     parser.add_argument(
         "--base-channels", type=int, default=128, help="Base channels for the UNet to start with"
+    )
+    parser.add_argument(
+        "--wavelet-loss", help="Use wavelets fix high frequency artifacts.", action='store_true'
     )
     return parser.parse_args()
 
