@@ -27,18 +27,7 @@ global_use_fourier_cost = False
 
 @partial(jax.jit, static_argnames=['model'])
 def diff_step(net_state, x, y, labels, time, model):
-    B, P, H, W, C = None, None, None, None, None
-    if global_use_wavelet_cost:
-        x = forward_wavelet_packet_transform(x, wavelet='haar', max_level=2)
-        B, P, H, W, C = x.shape
-        x = jnp.reshape(x, (B, H, W, C*P))
-
     denoise = model.apply(net_state, (x, time, labels))
-
-    if global_use_wavelet_cost:
-        denoise = jnp.reshape(denoise, (B, P, H, W, C))
-        denoise = inverse_wavelet_packet_transform(denoise, wavelet='haar', max_level=2)
-
     pixel_mse_cost = jnp.mean(0.5 * (y - denoise) ** 2)
 
     def packet_norm(packs):
@@ -170,11 +159,6 @@ def main():
         print("Using class conditional")
     
     out_channels = input_shape[-1]
-    if global_use_wavelet_cost:
-        packets = forward_wavelet_packet_transform(imgs, wavelet='haar', max_level=2)
-        _, P, H, W, C = packets.shape
-        out_channels = C*P
-        input_shape = [H, W, out_channels]
 
     if args.attn_heads_upsample == -1:
         args.attn_heads_upsample = args.attn_heads
