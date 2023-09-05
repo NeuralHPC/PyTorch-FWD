@@ -11,7 +11,7 @@ from functools import partial
 from src.Improved_UNet.UNet import Improv_UNet
 
 from src.util import get_mnist_test_data
-from src.freq_math import power_divergence
+from src.freq_math import fourier_power_divergence, wavelet_packet_power_divergence
 
 
 def linear_noise_scheduler(current_time_step: int, max_steps: int) -> Tuple[jnp.ndarray]:
@@ -223,7 +223,9 @@ def sample_net_test(net_state: FrozenDict, model: nn.Module, key: int,
     rec = x + yhat
     rec_mse = jnp.mean((rec - test_img)**2)
     noise_mse = jnp.mean((y - yhat)**2)
-    power_divergence_test = power_divergence(rec, test_img)
+    power_divergence_test = (
+        fourier_power_divergence(rec, test_img),
+        wavelet_packet_power_divergence(rec, test_img))
     return rec, rec_mse, noise_mse, power_divergence_test
 
 
