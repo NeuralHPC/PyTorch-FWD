@@ -63,7 +63,8 @@ def testing(e, net_state, model, input_shape, writer, time_steps, data_dir):
                                                  sampling_function=sample_noise_simple)
         writer.write_images(e, {f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
-        writer.write_scalars(e, {f'test_power_div_{test_time}_{seed}': power_div})
+        writer.write_scalars(e, {f'test_fourier_power_div_{test_time}_{seed}': power_div[0],
+                                 f'test_wp_power_div_{test_time}_{seed}': power_div[1]})
         
     seed = 6
     test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps, label=5,
@@ -76,7 +77,8 @@ def testing(e, net_state, model, input_shape, writer, time_steps, data_dir):
         writer.write_images(e, {
             f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
-        writer.write_scalars(e, {f'test_power_div_{test_time}_{seed}': power_div})
+        writer.write_scalars(e, {f'test_fourier_power_div_{test_time}_{seed}': power_div[0],
+                                 f'test_wp_power_div_{test_time}_{seed}': power_div[1]})
 
 @partial(jax.jit, static_argnames='gpus')
 def norm_and_split(img: jnp.ndarray,

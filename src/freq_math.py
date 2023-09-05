@@ -157,7 +157,7 @@ def inverse_wavelet_packet_transform(packet_array: jnp.array, wavelet: str, max_
     return rec
 
 
-def power_divergence(output: jnp.ndarray, target: jnp.ndarray) -> jnp.array:
+def fourier_power_divergence(output: jnp.ndarray, target: jnp.ndarray) -> jnp.ndarray:
     """Power spectrum entropy metric as presented in:
     https://openaccess.thecvf.com/content_ICCV_2019/papers/Hernandez_Human_Motion_Prediction_via_Spatio-Temporal_Inpainting_ICCV_2019_paper.pdf
 
@@ -176,3 +176,32 @@ def power_divergence(output: jnp.ndarray, target: jnp.ndarray) -> jnp.array:
     target_fft = jnp.fft.fft2(target)
     target_power = radius_no_sqrt(target_fft)
     return jnp.mean(optax.convex_kl_divergence(jnp.log(output_power), target_power))
+
+
+def wavelet_packet_power_divergence(output: jnp.ndarray, target: jnp.ndarray,
+                                    level: int = 3) -> jnp.ndarray:
+    """Compute the wavelet packet power divergence.
+      
+    Daubechies wavelets are orthogonal, see Ripples in Mathematics page 129:
+    ""
+    For orthogonal trans-
+    forms (such as those in the Daubechies family) the number of extra signal
+    coefficients is exactly L - 2, with L being the filter length. See p. 135 for the
+    proof.
+    ""
+    Orthogonal transforms conserve energy according
+    Proposition 7.7.1 from Ripples in Mathematics page 80.
+
+    Args:
+        output (jnp.ndarray): _description_
+        target (jnp.ndarray): _description_
+
+    Returns:
+        jnp.ndarray: _description_
+    """
+    output_packets = forward_wavelet_packet_transform(output, max_level=level)
+    target_packets = forward_wavelet_packet_transform(target, max_level=level)
+
+    output_energy = output_packets**2
+    target_energy = target_packets**2
+    return jnp.mean(optax.convex_kl_divergence(jnp.log(output_energy), target_energy))
