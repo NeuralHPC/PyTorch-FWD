@@ -241,10 +241,19 @@ def batch_DDIM(net_state: FrozenDict, model: nn.Module, key: int,
     @jax.jit
     def fori_image(i, carry):
         prng_key, x_t_1, time = carry
-        alpha_t, _, _  = linear_noise_scheduler(time, 1000)
-        alpha_t_1, _, _ = linear_noise_scheduler(time, 1000)
-        if time == 0:
-            alpha_t_1 = 1.0
+
+        # Computation of alphas every time adds only a little computational overhead.
+        # It can be treated as neglegent at the moment
+        # TODO: Find a clean way to do this.
+        alpha_t_list = []
+        alpha_t_1_list = []
+        for time in reversed(range(max_steps)):
+            at, _, _ = linear_noise_scheduler(time, max_steps)
+            alpha_t_list.append(at)
+        alpha_t_1_list = [1] + alpha_t_list[:-1]
+        alpha_t = alpha_t_list[time]
+        alpha_t_1 = alpha_t_1_list[time]
+        
         sigma_t = eta*((jnp.sqrt((1-alpha_t_1)/(1-alpha_t)))*(jnp.sqrt((1-alpha_t)/(alpha_t_1))))
         _, prng_key = jax.random.split(prng_key)
         z = jax.random.normal(
@@ -252,8 +261,8 @@ def batch_DDIM(net_state: FrozenDict, model: nn.Module, key: int,
         ) 
         denoise = model.apply(net_state,
                               (x_t_1,
-                               jnp.expand_dims(jnp.array(time), -1),
-                               jnp.expand_dims(jnp.array(test_label), 0)))
+                               jnp.array([time]*batch_size),
+                               test_label))
         pred_x_0 = jnp.sqrt(alpha_t_1/alpha_t)*((x_t_1 - (jnp.sqrt(1-alpha_t)*denoise)))
         point_x_t = jnp.sqrt(1-alpha_t_1-(sigma_t**2))*denoise
         x_mean = pred_x_0 + point_x_t + sigma_t*z
