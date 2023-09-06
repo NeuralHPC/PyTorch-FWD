@@ -65,6 +65,7 @@ def sample_30K(args: argparse.Namespace, net_state: FrozenDict,
 
 if __name__ == "__main__":
     args = _sampler_args()
+    print(args)
     with open(args.ckpt_path, "rb") as fp:
         loaded = pickle.load(fp)
    

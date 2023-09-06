@@ -7,6 +7,13 @@ import jax.numpy as jnp
 import flax.linen as nn
 
 
+from src.freq_math import (
+    forward_wavelet_packet_transform,
+    inverse_wavelet_packet_transform
+)
+
+
+
 @jax.jit
 def pad_odd(input_x: jnp.ndarray) -> jnp.ndarray:
     # dont pad the batch axis.
@@ -24,7 +31,8 @@ def pad_odd(input_x: jnp.ndarray) -> jnp.ndarray:
 class UNet(nn.Module):
     output_channels: int
     transpose_conv = False
-    base_feat_no = 64
+    wavelet_packets: int = False
+    base_feat_no = 64 # TODO!
 
     @nn.compact
     def __call__(self, x_in: Tuple[jnp.ndarray]):

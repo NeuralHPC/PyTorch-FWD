@@ -1,6 +1,5 @@
 import datetime
 import pickle
-from typing import List, Dict
 from functools import partial
 import os
 
@@ -8,20 +7,16 @@ from clu import metric_writers
 
 import jax
 import jax.numpy as jnp
-# jax.config.update('jax_threefry_partitionable', True)
 
 import optax
 import flax.linen as nn
 from flax.core.frozen_dict import FrozenDict
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from src.util import _parse_args, get_mnist_train_data
 from src.networks import UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test
-
-
 
 @partial(jax.jit, static_argnames=['model'])
 def diff_step(net_state, x, y, labels, time, model):

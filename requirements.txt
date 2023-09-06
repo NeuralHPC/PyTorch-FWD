@@ -4,3 +4,5 @@ matplotlib
 clu
 tensorflow-cpu
 multiprocess
+jaxwt==0.0.8
+scipy

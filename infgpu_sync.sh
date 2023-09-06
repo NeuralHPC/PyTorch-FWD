@@ -1,4 +1,4 @@
 while true; do
-	sleep 5
-	rsync -r -a -v /home/wolter/uni/diffusion wolter@lmgpu-login.informatik.uni-bonn.de:/home/wolter/uni
+	sleep 3
+	rsync --exclude home/wolter/uni/diffusion-data -r -a -v /home/wolter/uni/diffusion wolter@lmgpu-login.informatik.uni-bonn.de:/home/wolter/uni 
 done
