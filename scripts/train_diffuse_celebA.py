@@ -173,8 +173,11 @@ def main():
         args.attn_heads_upsample = args.attn_heads
     
     channel_mult = []
-    for value in args.channel_mult.split(","):
-        channel_mult.append(int(value))
+    if ',' in args.channel_mult:
+        for value in args.channel_mult.split(","):
+            channel_mult.append(int(value))
+    else:
+        channel_mult.append(int(args.channel_mult))
 
     attn_res = []
     for value in args.attn_resolution.split(","):
