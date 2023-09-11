@@ -5,6 +5,7 @@ import argparse
 import struct
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 import matplotlib.animation as manimation
 import os
 import json
@@ -83,6 +84,9 @@ def _parse_args():
     )
     parser.add_argument(
         "--wavelet-loss", help="Use wavelets fix high frequency artifacts.", action='store_true'
+    )
+    parser.add_argument(
+        "--dataset", type=str, default="CelebAHQ", help="Select the dataset to diffuse"
     )
     return parser.parse_args()
 
@@ -196,6 +200,58 @@ def get_batched_celebA_paths(data_dir: str, batch_size: int = 50) -> Tuple[List[
 
     labels_dict = get_label_dict(labels_path)
     return image_path_batches, labels_dict
+
+
+def get_only_celebA_batches(data_dir: str, batch_size: int, split: str = 'train') -> Tuple[List[np.ndarray], Dict[str, int]]:
+    """Split images to batches for CelebA dataset.
+
+    Args:
+        data_dir (str): Data root directory.
+        batch_size(int): Batch size.
+        split(str, optional): Training and Validation split
+
+    Returns:
+        Tuple[List[np.ndarray], dict[str, int]]: A tuple containing list of bacthed image names and labels
+    """
+    img_folder_path = os.path.join(data_dir, 'Img/img_align_celeba/')
+    parition_path = os.path.join(data_dir, 'Eval/list_eval_partition.txt')
+    partition_df = pd.read_csv(parition_path, names=['images', 'split'], sep=' ')
+
+    split_val = 0
+    if split == 'validation':
+        split_val = 1
+
+    image_names = []
+    image_names = partition_df[partition_df['split'] == split_val]['images']
+    image_names = [image_name.split('.')[0] + ".jpg" for image_name in image_names]
+    image_path_list_array = np.array([os.path.join(img_folder_path, image_name) for image_name in image_names])
+
+    image_count = len(image_path_list_array)
+    image_path_batches = np.array_split(image_path_list_array, image_count // batch_size)
+
+    labels_dict = get_celebA_labels(data_dir)
+    return image_path_batches, labels_dict
+
+
+def get_celebA_labels(path: str) -> Dict[str, int]:
+    """Load CelebA labels.
+
+    Args:
+        path (str): Labels path
+
+    Returns:
+        Dict[str, int]: Dictionary containing string and integer
+    """
+    labels_path = os.path.join(path, 'Anno/identity_CelebA.txt')
+    labels_dict = {}
+    with open(labels_path, 'r') as fp:
+        for line in fp:
+            line = line.replace('\n', '')
+            key, value = line.split(' ')
+            # key = key.split(".")[0]
+            labels_dict[key] = int(value)
+    return labels_dict
+
 
 
 def get_label_dict(path: str) -> Dict[str, int]:
