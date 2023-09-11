@@ -16,7 +16,8 @@ import numpy as np
 
 from src.util import _parse_args, get_mnist_train_data
 from src.networks import UNet
-from src.sample import sample_noise, sample_net_noise, sample_net_test
+from src.sample import sample_noise_simple, sample_net_noise, sample_net_test
+
 
 @partial(jax.jit, static_argnames=['model'])
 def diff_step(net_state, x, y, labels, time, model):
@@ -39,7 +40,7 @@ def train_step(batch: jnp.ndarray,
         key, shape=[batch.shape[0]], minval=1, maxval=time_steps)
     current_step_array = jnp.expand_dims(current_step_array, -1)
     seed_array = jax.random.split(key, batch.shape[0])
-    batch_map = jax.vmap(partial(sample_noise, max_steps=time_steps))
+    batch_map = jax.vmap(partial(sample_noise_simple, max_steps=time_steps))
     x, y = batch_map(batch, current_step_array, seed_array)
 
     mse, grads = diff_step_grad(net_state, x, y, labels,
@@ -47,48 +48,37 @@ def train_step(batch: jnp.ndarray,
 
     updates, opt_state = opt.update(grads, opt_state, net_state)
     net_state = optax.apply_updates(net_state, updates)
-
-    # recurrent diffusion update
-    # time_apply = jax.vmap(partial(model.apply, variables=net_state))
-    # key = jax.random.split(key, 1)[0]
-    # # rec_steps = 1
-    # rec_x = x_array
-    # # for _ in range(rec_steps):
-    # rec_x = time_apply(x_in=(rec_x, time, labels))[..., 0]
-    # 
-    # map_tree = (rec_x[1:],
-    #             #y_array[:-rec_steps],
-    #             y_array[:-1],
-    #             time[:-1],
-    #             labels[:-1])
-    # time_rec_map = jax.vmap(
-    #         partial(reconstruct, net_state=net_state, model=model))
-    # mses2, grads = time_rec_map(map_tree=map_tree)
-    # net_state, opt_state = update(net_state, opt_state, grads)
-    # mse = jnp.mean(jnp.concatenate([mses, mses2]))
     return mse, net_state, opt_state
 
 
 def testing(e, net_state, model, input_shape, writer, time_steps, data_dir):
     seed = 5
-    test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
+    test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps, label=5,
+                                  sampling_function=sample_noise_simple)
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
     # step tests
     for test_time in [1, time_steps//4, time_steps//2]:
-        test_image, rec_mse, _ = sample_net_test(net_state, model, seed, test_time, time_steps, data_dir)
+        test_image, rec_mse, _, power_div = sample_net_test(net_state, model, seed, test_time, time_steps, data_dir,
+                                                 sampling_function=sample_noise_simple)
         writer.write_images(e, {f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
+        writer.write_scalars(e, {f'test_fourier_power_div_{test_time}_{seed}': power_div[0],
+                                 f'test_wp_power_div_{test_time}_{seed}': power_div[1]})
         
     seed = 6
-    test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps)
+    test_image = sample_net_noise(net_state, model, seed, input_shape, time_steps, label=5,
+                                  sampling_function=sample_noise_simple)
     writer.write_images(e, {
         f'fullnoise_{time_steps}_{seed}': test_image})
     for test_time in [1, time_steps//4, time_steps//2]:
-        test_image, rec_mse, _ = sample_net_test(net_state, model, seed, test_time, time_steps, data_dir)
+        test_image, rec_mse, _, power_div = sample_net_test(net_state, model, seed, test_time, time_steps, data_dir,
+                                                 sampling_function=sample_noise_simple)
         writer.write_images(e, {
             f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
+        writer.write_scalars(e, {f'test_fourier_power_div_{test_time}_{seed}': power_div[0],
+                                 f'test_wp_power_div_{test_time}_{seed}': power_div[1]})
 
 @partial(jax.jit, static_argnames='gpus')
 def norm_and_split(img: jnp.ndarray,
