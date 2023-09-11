@@ -19,6 +19,8 @@ Diffusion on CelebAHQ
 ```
 PYTHONPATH=. python scripts/train_diffuse_celebA.py --batch-size 10 --seed 42 --epochs 200 --data-dir <path to data>
 ```
+Add `--dataset='celeba'` to run on CelebA, by default it uses CelebAHQ dataset.
+
 Sampling on CelebAHQ
 ```
 PYTHONPATH=. python scripts/sample_diffuse_celebA.py --ckpt-path <checkpoint_path> --input-shape <64>

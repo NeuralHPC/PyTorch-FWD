@@ -15,7 +15,7 @@ from flax.core.frozen_dict import FrozenDict
 
 import numpy as np
 
-from src.util import _parse_args, get_batched_celebA_paths, batch_loader, _save_model
+from src.util import _parse_args, get_batched_celebA_paths, batch_loader, _save_model, get_only_celebA_batches
 from src.Improved_UNet.UNet import Improv_UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA, sample_DDPM
 from src.freq_math import forward_wavelet_packet_transform, inverse_wavelet_packet_transform
@@ -135,21 +135,31 @@ def main():
 
     print(f"Working with {gpus} gpus.")
 
-    path_batches, labels_dict = get_batched_celebA_paths(args.data_dir, batch_size)
-
-    resize=None
+    resize = None
     if args.resize:
         resize = (args.resize, args.resize)
 
-    print("Data loaded. Starting to train.")
+    train_batched_fn = None
+    test_batched_fn = None
+    if args.dataset.lower() == "celebahq":
+        print("Loading CelebAHQ dataset")
+        train_batched_fn = test_batched_fn = get_batched_celebA_paths
+    elif args.dataset.lower() == "celeba":
+        print("Loading CelebA dataset")
+        train_batched_fn = get_only_celebA_batches
+        test_batched_fn = partial(get_only_celebA_batches, split='validation')
+    else:
+        raise NotImplementedError("Only supported datasets are CelebAHQ and CelebA.")
+
+    path_batches, labels_dict = train_batched_fn(args.data_dir, batch_size)
+    print("Data loaded. Starting to train")
     dummy_img_batch, _ = batch_loader(path_batches[0], labels_dict, resize)
     input_shape = list(dummy_img_batch[0].shape)
     print(f"Total {len(path_batches)} number of batches")
     batch_loader_w_dict = partial(batch_loader, labels_dict=labels_dict, resize=resize)
     print(f"Input shape: {input_shape}")
 
-    # Load test data images
-    test_patches, labels_dict = get_batched_celebA_paths(args.data_dir)
+    test_patches, labels_dict = test_batched_fn(args.data_dir, batch_size)
     imgs, labels = batch_loader(test_patches[0], labels_dict, resize)
     test_data = (imgs[:5], labels[:5])
 
@@ -163,8 +173,11 @@ def main():
         args.attn_heads_upsample = args.attn_heads
     
     channel_mult = []
-    for value in args.channel_mult.split(","):
-        channel_mult.append(int(value))
+    if ',' in args.channel_mult:
+        for value in args.channel_mult.split(","):
+            channel_mult.append(int(value))
+    else:
+        channel_mult.append(int(args.channel_mult))
 
     attn_res = []
     for value in args.attn_resolution.split(","):

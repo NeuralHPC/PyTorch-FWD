@@ -9,7 +9,7 @@ import argparse
 
 from flax.core.frozen_dict import FrozenDict
 import flax.linen as nn
-from src.sample import sample_DDPM, batch_DDPM
+from src.sample import sample_DDPM, batch_DDPM, sample_DDIM, batch_DDIM
 from src.util import write_movie, _sampler_args, get_label_dict
 from functools import partial
 import matplotlib.pyplot as plt
@@ -30,8 +30,13 @@ def sample_30K(args: argparse.Namespace, net_state: FrozenDict,
     base_path = "sample_imgs"
     os.makedirs(base_path, exist_ok=True)
 
+    sample_fn = batch_DDPM
+    if args.use_DDIM:
+        sample_fn = batch_DDIM
+
+    print(f"Using sampling function: {sample_fn}")
     gpus = args.gpus if args.gpus > 0 else jax.local_device_count()
-    sample_partial = jax.pmap(partial(batch_DDPM, 
+    sample_partial = jax.pmap(partial(sample_fn, 
                               net_state=net_state,
                               model=model,
                               key=args.seed,
@@ -77,7 +82,11 @@ if __name__ == "__main__":
         label = jax.random.choice(key, labels, [1], replace=False)
         print(seed,label)
 
-        test_img, steps = sample_DDPM(net_state, model, args.seed,
+        sample_fn = sample_DDPM
+        if args.use_DDIM:
+            sample_fn = sample_DDIM
+
+        test_img, steps = sample_fn(net_state, model, args.seed,
                                       [args.input_shape, args.input_shape, 3],
                                       args.diff_steps, label[0])
         
