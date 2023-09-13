@@ -4,11 +4,13 @@ import datetime
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
+import builtins
 
 from clu import metric_writers, parameter_overview
 
 import jax
 import jax.numpy as jnp
+import jax.experimental.multihost_utils as jax_mhu
 import optax
 import flax.linen as nn
 from flax.core.frozen_dict import FrozenDict
@@ -20,8 +22,21 @@ from src.Improved_UNet.UNet import Improv_UNet
 from src.sample import sample_noise, sample_net_noise, sample_net_test_celebA, sample_DDPM
 from src.freq_math import forward_wavelet_packet_transform, inverse_wavelet_packet_transform
 
+
+#Settings for MultiNode setup
+node_id = os.environ["SLURM_NODEID"]
+visible_devices = [int(gpu) for gpu in os.environ["CUDA_VISIBLE_DEVICES"].split(",")]
+
+
+# Override the print function to print only on the zeroth node, if necessary
+def print(*args, **kwargs):
+    if node_id == '0':
+        builtins.print(*args, **kwargs)
+
+
 global_use_wavelet_cost = False
 global_use_fourier_cost = False
+global_distribute = False
 
 
 @partial(jax.jit, static_argnames=['model'])
@@ -65,7 +80,12 @@ def train_step(batch: jnp.ndarray,
     cost_and_aux, grads = diff_step_grad(net_state, x, y, labels,
                                 current_step_array, model)
     mse, freq_aux = cost_and_aux
-    return mse, grads, freq_aux
+    pixel_mse_cost, packet_mse_cost = freq_aux
+    grads = jax.lax.pmean(grads, axis_name='i')
+    mse = jax.lax.pmean(mse, axis_name='i')
+    pixel_mse_cost = jax.lax.pmean(pixel_mse_cost, axis_name='i')
+    packet_mse_cost = jax.lax.pmean(packet_mse_cost, axis_name='i')
+    return mse, grads, (pixel_mse_cost, packet_mse_cost)
 
 
 def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
@@ -80,7 +100,7 @@ def testing(e, net_state, model, input_shape, writer, time_steps, test_data):
         test_image, rec_mse, _ = sample_net_test_celebA(net_state, model, seed, test_time, time_steps, test_data)
         writer.write_images(e, {f'test_{test_time}_{seed}': test_image})
         writer.write_scalars(e, {f'test_rec_mse_{test_time}_{seed}': rec_mse})
-        
+
     seed = 6
     test_image, _ = sample_DDPM(net_state, model, seed, input_shape, time_steps)
     writer.write_images(e, {
@@ -109,29 +129,35 @@ def norm_and_split(img: jnp.ndarray,
 
 
 def main():
-    print("Running diffusion training on celebA.") 
+    print("Running diffusion training on celebA.")
     args = _parse_args()
     print(args)
-    
+
     global global_use_wavelet_cost
     global_use_wavelet_cost = args.wavelet_loss
     print(f"Using wavelet loss: {global_use_wavelet_cost}")
 
     now = datetime.datetime.now()
-    
+
     # create the logdir if it does not exist already.
     if not os.path.exists(args.logdir):
         os.makedirs(args.logdir)
 
-    writer = metric_writers.create_default_writer(args.logdir + f"/weighted_pixel_packetnorm_{now}")
-    checkpoint_dir = os.path.join(args.logdir, 'checkpoints')
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    global_distribute = args.distribute
+    if global_distribute:
+        print("Using distributed code")
+        jax.distributed.initialize(local_device_ids=visible_devices)
+    if node_id == '0':
+        writer = metric_writers.create_default_writer(args.logdir + f"/{now}")
+        checkpoint_dir = os.path.join(args.logdir, 'checkpoints')
+        os.makedirs(checkpoint_dir, exist_ok=True)
 
     np.random.seed(args.seed)
     key = jax.random.PRNGKey(args.seed)
-    
+
     batch_size = args.batch_size
-    gpus = args.gpus if args.gpus > 0 else jax.local_device_count() 
+
+    gpus = args.gpus if args.gpus > 0 else jax.local_device_count()
 
     print(f"Working with {gpus} gpus.")
 
@@ -166,12 +192,12 @@ def main():
     # Process model related args
     if args.conditional:
         print("Using class conditional")
-    
+
     out_channels = input_shape[-1]
 
     if args.attn_heads_upsample == -1:
         args.attn_heads_upsample = args.attn_heads
-    
+
     channel_mult = []
     if ',' in args.channel_mult:
         for value in args.channel_mult.split(","):
@@ -181,7 +207,7 @@ def main():
 
     attn_res = []
     for value in args.attn_resolution.split(","):
-        attn_res.append(input_shape[0]//int(value)) 
+        attn_res.append(input_shape[0]//int(value))
 
     # model = UNet(output_channels=input_shape[-1])
     model = Improv_UNet(
@@ -197,7 +223,7 @@ def main():
     opt = optax.adam(args.learning_rate)
 
     # create the model state
-    net_state = model.init(key, 
+    net_state = model.init(key,
             (jnp.ones([batch_size] + input_shape),
              jnp.ones([batch_size]),
              jnp.expand_dims(jnp.ones([batch_size]), -1)))
@@ -205,7 +231,7 @@ def main():
     opt_state = opt.init(net_state)
     iterations = 0
 
-    @partial(jax.jit, static_argnames= ['model', 'opt', 'time_steps'])
+    # @partial(jax.jit, static_argnames= ['model', 'opt', 'time_steps'])
     def central_step(img: jnp.ndarray,
                      lbl: jnp.ndarray,
                      net_state: FrozenDict,
@@ -214,6 +240,7 @@ def main():
                      model: nn.Module,
                      opt: optax.GradientTransformation,
                      time_steps: int):
+        jax_mhu.sync_global_devices(name="one_ring")
         seed = args.seed + seed_offset
         img = jnp.array(img)
         img_norm, lbl = norm_and_split(img, lbl, gpus)
@@ -221,7 +248,7 @@ def main():
                 net_state=net_state, model=model,
                 time_steps=time_steps)
         pmap_train_step = jax.pmap(
-             partial_train_step, devices=jax.devices()[:gpus]
+             partial_train_step, devices=jax.local_devices()[:gpus], axis_name='i'
         )
         mses, multi_grads, freq_aux = pmap_train_step(
             batch=img_norm, labels=lbl,
@@ -244,26 +271,31 @@ def main():
                 mean_loss, net_state, opt_state, freq_aux = central_step(
                     img, lbl, net_state, opt_state, iterations*gpus,
                     model, opt, args.time_steps)
-                if pos % 50 == 0:
-                    print(e, pos, mean_loss, len(load_asinc_dict))
+                if pos % 10 == 0:
+                    print(e, pos, mean_loss, len(load_asinc_dict), flush=True)
 
                 iterations += 1
-                writer.write_scalars(iterations, {"loss": mean_loss})
-                pixel_mse_cost, packet_mse_cost = freq_aux
-                writer.write_scalars(iterations, {"pixel_mse_cost": jnp.mean(pixel_mse_cost)})
-                writer.write_scalars(iterations, {"packet_mse_cost": jnp.mean(packet_mse_cost)})
+                if node_id == '0':
+                    writer.write_scalars(iterations, {"loss": mean_loss})
+                    pixel_mse_cost, packet_mse_cost = freq_aux
+                    writer.write_scalars(iterations, {"pixel_mse_cost": jnp.mean(pixel_mse_cost)})
+                    writer.write_scalars(iterations, {"packet_mse_cost": jnp.mean(packet_mse_cost)})
 
             print(' ', flush=True)
-            if e % 5 == 0:
+            if e % 5 == 0 and node_id == '0':
                 print('testing...')
                 testing(e, net_state, model, input_shape, writer,
                         time_steps=args.time_steps, test_data=test_data)
                 to_storage = (net_state, opt_state, model)
                 _save_model(checkpoint_dir, now, e, to_storage)
 
-    print('testing...')
-    testing(e, net_state, model, input_shape, writer, time_steps=args.time_steps, test_data=test_data)
-    _save_model(checkpoint_dir, now, args.epochs, (net_state, opt_state, model))
+    if node_id == '0':
+        print('testing...')
+        testing(e, net_state, model, input_shape, writer, time_steps=args.time_steps, test_data=test_data)
+        _save_model(checkpoint_dir, now, args.epochs, (net_state, opt_state, model))
+
+    if global_distribute:
+        jax.distributed.shutdown()
 
 
 if __name__ == '__main__':
