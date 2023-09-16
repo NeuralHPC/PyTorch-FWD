@@ -1,20 +1,19 @@
-from typing import Tuple, List, Optional, Dict
-from concurrent.futures import ThreadPoolExecutor
-
 import argparse
-import struct
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import matplotlib.animation as manimation
-import os
-import json
-import pickle
 import datetime
+import json
+import os
+import pickle
+import struct
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Optional, Tuple
+
+import matplotlib.animation as manimation
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from flax.core.frozen_dict import FrozenDict
-
-
 from PIL import Image
+
 
 def _parse_args():
     """Parse cmd line args for training an image classifier."""
@@ -47,25 +46,28 @@ def _parse_args():
         "--time-steps", type=int, default=40, help="steps per diffusion"
     )
     parser.add_argument(
-        "--gpus", type=int, default=-1, help="set gpu no by hand. Use all if -1 (default)."
+        "--gpus",
+        type=int,
+        default=-1,
+        help="set gpu no by hand. Use all if -1 (default).",
+    )
+    parser.add_argument("--logdir", type=str, default="./log", help="logdir name.")
+    parser.add_argument(
+        "--distribute", help="TODO: Use for multinode training.", action="store_true"
+    )
+    parser.add_argument("--data-dir", required=True, help="Base dataset path")
+    parser.add_argument("--resize", type=int, default=64, help="Resize the input image")
+    parser.add_argument(
+        "--channel-mult",
+        type=str,
+        default="1,2,2,4",
+        help="Channel multiplier for the UNet",
     )
     parser.add_argument(
-        "--logdir", type=str, default="./log", help="logdir name."
-    )
-    parser.add_argument(
-        "--distribute", help="TODO: Use for multinode training.", action='store_true'
-    )
-    parser.add_argument(
-        "--data-dir", required=True, help="Base dataset path"
-    )
-    parser.add_argument(
-        "--resize", type=int, default=64, help="Resize the input image"
-    )
-    parser.add_argument(
-        "--channel-mult", type=str, default="1,2,2,4", help="Channel multiplier for the UNet"
-    )
-    parser.add_argument(
-        "--num-res-blocks", type=int, default=2, help="Number of residual blocks for the model"
+        "--num-res-blocks",
+        type=int,
+        default=2,
+        help="Number of residual blocks for the model",
     )
     parser.add_argument(
         "--conditional", action="store_false", help="Add the class condition to model"
@@ -74,16 +76,27 @@ def _parse_args():
         "--attn-heads", type=int, default=4, help="Number of attention heads"
     )
     parser.add_argument(
-        "--attn-heads-upsample", type=int, default=-1, help="Number of attention heads during upsample"
+        "--attn-heads-upsample",
+        type=int,
+        default=-1,
+        help="Number of attention heads during upsample",
     )
     parser.add_argument(
-        "--attn-resolution", type=str, default="16,8", help="Resolutions at which attention should be applied"
+        "--attn-resolution",
+        type=str,
+        default="16,8",
+        help="Resolutions at which attention should be applied",
     )
     parser.add_argument(
-        "--base-channels", type=int, default=128, help="Base channels for the UNet to start with"
+        "--base-channels",
+        type=int,
+        default=128,
+        help="Base channels for the UNet to start with",
     )
     parser.add_argument(
-        "--wavelet-loss", help="Use wavelets fix high frequency artifacts.", action='store_true'
+        "--wavelet-loss",
+        help="Use wavelets fix high frequency artifacts.",
+        action="store_true",
     )
     parser.add_argument(
         "--dataset", type=str, default="CelebAHQ", help="Select the dataset to diffuse"
@@ -93,44 +106,29 @@ def _parse_args():
 
 def _sampler_args():
     parser = argparse.ArgumentParser(
-    prog="Image sampler",
-    description="Sample Images from the diffusion model"
+        prog="Image sampler", description="Sample Images from the diffusion model"
+    )
+    parser.add_argument("--ckpt-path", required=True, help="Checkpoint path")
+    parser.add_argument(
+        "--input-shape", type=int, required=True, help="Sampled input shape"
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Seed value")
+    parser.add_argument(
+        "--diff-steps", type=int, default=40, help="Number of diffusion steps"
     )
     parser.add_argument(
-        "--ckpt-path",
-        required=True,
-        help="Checkpoint path"
+        "--gif", action="store_true", help="Store diffusion process as a GIF"
     )
     parser.add_argument(
-        "--input-shape",
+        "--gpus",
         type=int,
-        required=True,
-        help="Sampled input shape"
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Seed value"
-    )
-    parser.add_argument(
-        "--diff-steps",
-        type=int,
-        default=40,
-        help="Number of diffusion steps"
-    )
-    parser.add_argument(
-        "--gif",
-        action="store_true",
-        help="Store diffusion process as a GIF"
-    )
-    parser.add_argument(
-        "--gpus", type=int, default=-1, help="set gpu no by hand. Use all if -1 (default)."
+        default=-1,
+        help="set gpu no by hand. Use all if -1 (default).",
     )
     parser.add_argument(
         "--use-DDIM",
-        action='store_true',
-        help='Use DDIM Sampling else DDPM is used by default'
+        action="store_true",
+        help="Use DDIM Sampling else DDPM is used by default",
     )
     return parser.parse_args()
 
@@ -142,9 +140,9 @@ def get_mnist_test_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
         (array, array): A tuple containing the test
         images and labels.
     """
-    test_imgs_path = os.path.join(data_dir, 'raw/t10k-images-idx3-ubyte')
-    test_lbls_path = os.path.join(data_dir, 'raw/t10k-labels-idx1-ubyte')
-    
+    test_imgs_path = os.path.join(data_dir, "raw/t10k-images-idx3-ubyte")
+    test_lbls_path = os.path.join(data_dir, "raw/t10k-labels-idx1-ubyte")
+
     with open(test_imgs_path, "rb") as f:
         _, size = struct.unpack(">II", f.read(8))
         nrows, ncols = struct.unpack(">II", f.read(8))
@@ -164,8 +162,8 @@ def get_mnist_train_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
         (array, array): A tuple containing the training
         images and labels.
     """
-    train_imgs_path = os.path.join(data_dir, 'raw/train-images-idx3-ubyte')
-    train_labels_path = os.path.join(data_dir, 'raw/train-labels-idx1-ubyte')
+    train_imgs_path = os.path.join(data_dir, "raw/train-images-idx3-ubyte")
+    train_labels_path = os.path.join(data_dir, "raw/train-labels-idx1-ubyte")
 
     with open(train_imgs_path, "rb") as f:
         _, size = struct.unpack(">II", f.read(8))
@@ -179,7 +177,9 @@ def get_mnist_train_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     return img_data_train, lbl_data_train
 
 
-def get_batched_celebA_paths(data_dir: str, batch_size: int = 50) -> Tuple[List[np.ndarray], Dict[str, int]]:
+def get_batched_celebA_paths(
+    data_dir: str, batch_size: int = 50
+) -> Tuple[List[np.ndarray], Dict[str, int]]:
     """Split images to batches for CelebAHQ dataset.
 
     Args:
@@ -193,16 +193,22 @@ def get_batched_celebA_paths(data_dir: str, batch_size: int = 50) -> Tuple[List[
     labels_path = "./data/CelebAHQ/identity_CelebAHQ.txt"
 
     image_names = os.listdir(img_folder_path)
-    image_path_list_array = np.array([os.path.join(img_folder_path, image_name) for image_name in image_names])
-    
+    image_path_list_array = np.array(
+        [os.path.join(img_folder_path, image_name) for image_name in image_names]
+    )
+
     image_count = len(image_path_list_array)
-    image_path_batches = np.array_split(image_path_list_array, image_count//batch_size )
+    image_path_batches = np.array_split(
+        image_path_list_array, image_count // batch_size
+    )
 
     labels_dict = get_label_dict(labels_path)
     return image_path_batches, labels_dict
 
 
-def get_only_celebA_batches(data_dir: str, batch_size: int, split: str = 'train') -> Tuple[List[np.ndarray], Dict[str, int]]:
+def get_only_celebA_batches(
+    data_dir: str, batch_size: int, split: str = "train"
+) -> Tuple[List[np.ndarray], Dict[str, int]]:
     """Split images to batches for CelebA dataset.
 
     Args:
@@ -213,21 +219,25 @@ def get_only_celebA_batches(data_dir: str, batch_size: int, split: str = 'train'
     Returns:
         Tuple[List[np.ndarray], dict[str, int]]: A tuple containing list of bacthed image names and labels
     """
-    img_folder_path = os.path.join(data_dir, 'Img/img_align_celeba/')
-    parition_path = os.path.join(data_dir, 'Eval/list_eval_partition.txt')
-    partition_df = pd.read_csv(parition_path, names=['images', 'split'], sep=' ')
+    img_folder_path = os.path.join(data_dir, "Img/img_align_celeba/")
+    parition_path = os.path.join(data_dir, "Eval/list_eval_partition.txt")
+    partition_df = pd.read_csv(parition_path, names=["images", "split"], sep=" ")
 
     split_val = 0
-    if split == 'validation':
+    if split == "validation":
         split_val = 1
 
     image_names = []
-    image_names = partition_df[partition_df['split'] == split_val]['images']
-    image_names = [image_name.split('.')[0] + ".jpg" for image_name in image_names]
-    image_path_list_array = np.array([os.path.join(img_folder_path, image_name) for image_name in image_names])
+    image_names = partition_df[partition_df["split"] == split_val]["images"]
+    image_names = [image_name.split(".")[0] + ".jpg" for image_name in image_names]
+    image_path_list_array = np.array(
+        [os.path.join(img_folder_path, image_name) for image_name in image_names]
+    )
 
     image_count = len(image_path_list_array)
-    image_path_batches = np.array_split(image_path_list_array, image_count // batch_size)
+    image_path_batches = np.array_split(
+        image_path_list_array, image_count // batch_size
+    )
 
     labels_dict = get_celebA_labels(data_dir)
     return image_path_batches, labels_dict
@@ -242,16 +252,15 @@ def get_celebA_labels(path: str) -> Dict[str, int]:
     Returns:
         Dict[str, int]: Dictionary containing string and integer
     """
-    labels_path = os.path.join(path, 'Anno/identity_CelebA.txt')
+    labels_path = os.path.join(path, "Anno/identity_CelebA.txt")
     labels_dict = {}
-    with open(labels_path, 'r') as fp:
+    with open(labels_path, "r") as fp:
         for line in fp:
-            line = line.replace('\n', '')
-            key, value = line.split(' ')
+            line = line.replace("\n", "")
+            key, value = line.split(" ")
             # key = key.split(".")[0]
             labels_dict[key] = int(value)
     return labels_dict
-
 
 
 def get_label_dict(path: str) -> Dict[str, int]:
@@ -270,8 +279,9 @@ def get_label_dict(path: str) -> Dict[str, int]:
     return hq_labels
 
 
-def batch_loader(batch_array: np.ndarray, labels_dict: Dict[str, int],
-                 resize: Tuple[int, int] = None) -> np.ndarray:
+def batch_loader(
+    batch_array: np.ndarray, labels_dict: Dict[str, int], resize: Tuple[int, int] = None
+) -> np.ndarray:
     """Load image batch to memory.
 
     Args:
@@ -319,7 +329,7 @@ def write_movie(
         name (str, optional): The name of the movie file. Defaults to "grad_movie".
         xlim (int, optional): Largest x value in the data. Defaults to 3.
         ylim (int, optional): Largest y value in the data. Defaults to 3.
-    
+
     Raises:
         RuntimeError: If conda ffmpeg package is not installed.
     """
@@ -332,13 +342,11 @@ def write_movie(
             "'conda install -c conda-forge ffmpeg' in your terminal."
         )
 
-    metadata = dict(
-        title="Diffusion", artist="Matplotlib", comment="Diffusion movie!"
-    )
+    metadata = dict(title="Diffusion", artist="Matplotlib", comment="Diffusion movie!")
     writer = ffmpeg_writer(fps=60, metadata=metadata)
 
     fig = plt.figure()
-    l = plt.imshow(images[0]/np.max(np.abs(images[0])))
+    l = plt.imshow(images[0] / np.max(np.abs(images[0])))
     plt.colorbar()
 
     # plt.xlim(-xlim, xlim)
@@ -346,13 +354,16 @@ def write_movie(
 
     with writer.saving(fig, f"{name}.gif", 100):
         for img in images:
-            l.set_data(img/np.max(np.abs(img)))
+            l.set_data(img / np.max(np.abs(img)))
             writer.grab_frame()
 
-def _save_model(checkpoint_dir: str,
-                time: datetime.datetime,
-                epochs: int,
-                model_data: Tuple[FrozenDict]) -> None:
+
+def _save_model(
+    checkpoint_dir: str,
+    time: datetime.datetime,
+    epochs: int,
+    model_data: Tuple[FrozenDict],
+) -> None:
     """Save the model parameters
 
     Args:

@@ -1,14 +1,15 @@
+import os
+
 import jax
 import jax.numpy as jnp
 import numpy as np
-from PIL import Image
-import os
 import scipy
+from PIL import Image
 from tqdm import tqdm
-
 
 """ Code taken from https://github.com/matthias-wright/jax-fid/blob/main/jax_fid/fid.py
 """
+
 
 def compute_statistics(path, params, apply_fn, batch_size, img_size=None):
     if path.endswith(".npz"):
@@ -85,9 +86,10 @@ def compute_sampled_statistics(batched_images, net_state, apply_fn, img_size=256
         for img in imgs:
             img = Image.fromarray(np.array(img))
             img = img.resize((img_size, img_size), Image.BILINEAR)
-            rs_imgs.append(jnp.asarray(img)/255.0)
+            rs_imgs.append(jnp.asarray(img) / 255.0)
         rs_imgs = jnp.stack(rs_imgs, axis=0)
         return rs_imgs
+
     x = resize_imgs(batched_images)
     x = 2 * x - 1
     preds = apply_fn(net_state, jax.lax.stop_gradient(x))
