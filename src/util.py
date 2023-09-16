@@ -1,18 +1,13 @@
 import argparse
 import datetime
-import json
 import os
 import pickle
-import struct
-from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import matplotlib.animation as manimation
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from flax.core.frozen_dict import FrozenDict
-from PIL import Image
 
 
 def _parse_args():
@@ -131,189 +126,6 @@ def _sampler_args():
         help="Use DDIM Sampling else DDPM is used by default",
     )
     return parser.parse_args()
-
-
-def get_mnist_test_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
-    """Return the mnist test data set in numpy arrays.
-
-    Returns:
-        (array, array): A tuple containing the test
-        images and labels.
-    """
-    test_imgs_path = os.path.join(data_dir, "raw/t10k-images-idx3-ubyte")
-    test_lbls_path = os.path.join(data_dir, "raw/t10k-labels-idx1-ubyte")
-
-    with open(test_imgs_path, "rb") as f:
-        _, size = struct.unpack(">II", f.read(8))
-        nrows, ncols = struct.unpack(">II", f.read(8))
-        data = np.array(np.fromfile(f, dtype=np.dtype(np.uint8).newbyteorder(">")))
-        img_data_test = data.reshape((size, nrows, ncols))
-
-    with open(test_lbls_path, "rb") as f:
-        _, size = struct.unpack(">II", f.read(8))
-        lbl_data_test = np.array(np.fromfile(f, dtype=np.dtype(np.uint8)))
-    return img_data_test, lbl_data_test
-
-
-def get_mnist_train_data(data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
-    """Load the mnist training data set.
-
-    Returns:
-        (array, array): A tuple containing the training
-        images and labels.
-    """
-    train_imgs_path = os.path.join(data_dir, "raw/train-images-idx3-ubyte")
-    train_labels_path = os.path.join(data_dir, "raw/train-labels-idx1-ubyte")
-
-    with open(train_imgs_path, "rb") as f:
-        _, size = struct.unpack(">II", f.read(8))
-        nrows, ncols = struct.unpack(">II", f.read(8))
-        data = np.array(np.fromfile(f, dtype=np.dtype(np.uint8).newbyteorder(">")))
-        img_data_train = data.reshape((size, nrows, ncols))
-
-    with open(train_labels_path, "rb") as f:
-        _, size = struct.unpack(">II", f.read(8))
-        lbl_data_train = np.array(np.fromfile(f, dtype=np.dtype(np.uint8)))
-    return img_data_train, lbl_data_train
-
-
-def get_batched_celebA_paths(
-    data_dir: str, batch_size: int = 50
-) -> Tuple[List[np.ndarray], Dict[str, int]]:
-    """Split images to batches for CelebAHQ dataset.
-
-    Args:
-        data_dir (str): Data root directory
-        batch_size (int, optional): Batch size. Defaults to 50.
-
-    Returns:
-        Tuple[List[np.ndarray], Dict[str, str]]: A tuple containing list of batched image names and labels
-    """
-    img_folder_path = data_dir
-    labels_path = "./data/CelebAHQ/identity_CelebAHQ.txt"
-
-    image_names = os.listdir(img_folder_path)
-    image_path_list_array = np.array(
-        [os.path.join(img_folder_path, image_name) for image_name in image_names]
-    )
-
-    image_count = len(image_path_list_array)
-    image_path_batches = np.array_split(
-        image_path_list_array, image_count // batch_size
-    )
-
-    labels_dict = get_label_dict(labels_path)
-    return image_path_batches, labels_dict
-
-
-def get_only_celebA_batches(
-    data_dir: str, batch_size: int, split: str = "train"
-) -> Tuple[List[np.ndarray], Dict[str, int]]:
-    """Split images to batches for CelebA dataset.
-
-    Args:
-        data_dir (str): Data root directory.
-        batch_size(int): Batch size.
-        split(str, optional): Training and Validation split
-
-    Returns:
-        Tuple[List[np.ndarray], dict[str, int]]: A tuple containing list of bacthed image names and labels
-    """
-    img_folder_path = os.path.join(data_dir, "Img/img_align_celeba/")
-    parition_path = os.path.join(data_dir, "Eval/list_eval_partition.txt")
-    partition_df = pd.read_csv(parition_path, names=["images", "split"], sep=" ")
-
-    split_val = 0
-    if split == "validation":
-        split_val = 1
-
-    image_names = []
-    image_names = partition_df[partition_df["split"] == split_val]["images"]
-    image_names = [image_name.split(".")[0] + ".jpg" for image_name in image_names]
-    image_path_list_array = np.array(
-        [os.path.join(img_folder_path, image_name) for image_name in image_names]
-    )
-
-    image_count = len(image_path_list_array)
-    image_path_batches = np.array_split(
-        image_path_list_array, image_count // batch_size
-    )
-
-    labels_dict = get_celebA_labels(data_dir)
-    return image_path_batches, labels_dict
-
-
-def get_celebA_labels(path: str) -> Dict[str, int]:
-    """Load CelebA labels.
-
-    Args:
-        path (str): Labels path
-
-    Returns:
-        Dict[str, int]: Dictionary containing string and integer
-    """
-    labels_path = os.path.join(path, "Anno/identity_CelebA.txt")
-    labels_dict = {}
-    with open(labels_path, "r") as fp:
-        for line in fp:
-            line = line.replace("\n", "")
-            key, value = line.split(" ")
-            # key = key.split(".")[0]
-            labels_dict[key] = int(value)
-    return labels_dict
-
-
-def get_label_dict(path: str) -> Dict[str, int]:
-    """Load the labels form the given path.
-
-    Args:
-        path (str): Labels directory
-
-    Returns:
-        Dict[str, int]: A dictionary containing image name with label
-    """
-    hq_labels = json.load(open(path, "r"))
-    for key, value in hq_labels.items():
-        value = int(value.replace("\n", ""))
-        hq_labels[key] = value
-    return hq_labels
-
-
-def batch_loader(
-    batch_array: np.ndarray, labels_dict: Dict[str, int], resize: Tuple[int, int] = None
-) -> np.ndarray:
-    """Load image batch to memory.
-
-    Args:
-        batch_array (np.ndarray): List of image name.
-        labels_dict (Dict[str, int]): A dictionary containing labels
-        resize (Tuple[int, int], optional): Resize the image if required. Defaults to None.
-
-    Returns:
-        np.ndarray: Array of images.
-    """
-
-    def load(path: str) -> np.ndarray:
-        img = Image.open(path)
-        if resize:
-            img = img.resize(resize, Image.Resampling.LANCZOS)
-        return img
-
-    def label(path: str) -> np.ndarray:
-        img_name = path.split("/")[-1]
-        return labels_dict[img_name]
-
-    with ThreadPoolExecutor(max_workers=8) as p:
-        arrays = list(p.map(load, batch_array))
-        labels = list(p.map(label, batch_array))
-    return np.stack(arrays), np.stack(labels)
-
-
-def multi_batch_loader(batch_list):
-    # batches = list(map(batch_loader, batch_list))
-    with ThreadPoolExecutor() as p:
-        batches = p.map(batch_loader, batch_list, chunksize=10)
-    return batches
 
 
 def write_movie(
