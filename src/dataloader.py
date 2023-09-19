@@ -128,7 +128,9 @@ def get_dataloaders(
             "../cifar_data",
             download=True,
             train=True,
-            transform=transforms.Compose([transforms.ToTensor()]),
+            transform=transforms.Compose(
+                [transforms.RandomHorizontalFlip(), transforms.ToTensor()]
+            ),
         )
         val_set = datasets.CIFAR10(
             "../cifar_data",

@@ -137,7 +137,7 @@ class ResBlock(TimeStepBlock):
         channels: int,
         emb_channels: int,
         dropout: float,
-        out_channels: Union(int, None) = None,
+        out_channels: Union[int, None] = None,
         use_conv: bool = False,
         use_scale_shift_norm: bool = False,
         dims: int = 2,
@@ -264,7 +264,7 @@ class Improv_UNet(nn.Module):
         channel_mult: Tuple[int] = (1, 2, 4, 8),
         conv_resample: bool = True,
         dims: int = 2,
-        num_classes: Union(int, None) = None,
+        num_classes: Union[int, None] = None,
         use_checkpoint: bool = False,
         num_heads: int = 1,
         num_heads_upsample: int = -1,
@@ -345,11 +345,7 @@ class Improv_UNet(nn.Module):
                 use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
             ),
-            Attention(
-                ch,
-                use_checkpoint=use_checkpoint,
-                use_scale_shift_norm=use_scale_shift_norm,
-            ),
+            Attention(ch, use_checkpoint=use_checkpoint, num_heads=num_heads),
             ResBlock(
                 ch,
                 time_embed_dim,
@@ -380,7 +376,7 @@ class Improv_UNet(nn.Module):
                         Attention(
                             ch,
                             use_checkpoint=use_checkpoint,
-                            use_scale_shift_norm=use_scale_shift_norm,
+                            num_heads=num_heads_upsample,
                         )
                     )
                 if level and i == num_res_blocks:
@@ -409,7 +405,7 @@ class Improv_UNet(nn.Module):
             assert y.shape == (x.shape[0],)
             emb = emb + self.label_emb(y)
 
-        h = x.type(self.inner_dtype)
+        h = x
         for module in self.input_blocks:
             h = module(h, emb)
             hs.append(h)

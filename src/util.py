@@ -96,6 +96,7 @@ def _parse_args():
     parser.add_argument(
         "--dataset", type=str, default="CelebAHQ", help="Select the dataset to diffuse"
     )
+    parser.add_argument("--dropout", type=float, default=0.0, help="Dropout rate")
     return parser.parse_args()
 
 
