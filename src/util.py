@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 import matplotlib.animation as manimation
 import matplotlib.pyplot as plt
 import numpy as np
-from flax.core.frozen_dict import FrozenDict
+# from flax.core.frozen_dict import FrozenDict
 
 
 def _parse_args():
@@ -171,20 +171,20 @@ def write_movie(
             writer.grab_frame()
 
 
-def _save_model(
-    checkpoint_dir: str,
-    time: datetime.datetime,
-    epochs: int,
-    model_data: Tuple[FrozenDict],
-) -> None:
-    """Save the model parameters
+# def _save_model(
+#     checkpoint_dir: str,
+#     time: datetime.datetime,
+#     epochs: int,
+#     model_data: Tuple[FrozenDict],
+# ) -> None:
+#     """Save the model parameters
 
-    Args:
-        checkpoint_dir (str): Checkpoint directory
-        time (datetime.datetime): Time of saving
-        epochs (int): Epoch of saving
-        model_data (Tuple[FrozenDict]): Tuple containing the model data
-    """
-    save_dir = os.path.join(checkpoint_dir, f"e_{epochs}_time_{time}.pkl")
-    with open(save_dir, "wb") as fp:
-        pickle.dump(model_data, fp)
+#     Args:
+#         checkpoint_dir (str): Checkpoint directory
+#         time (datetime.datetime): Time of saving
+#         epochs (int): Epoch of saving
+#         model_data (Tuple[FrozenDict]): Tuple containing the model data
+#     """
+#     save_dir = os.path.join(checkpoint_dir, f"e_{epochs}_time_{time}.pkl")
+#     with open(save_dir, "wb") as fp:
+#         pickle.dump(model_data, fp)

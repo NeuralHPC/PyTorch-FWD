@@ -13,6 +13,7 @@ import torch.nn as nn
 import datetime
 import os
 from functools import partial
+from tqdm import tqdm
 
 
 def main():
@@ -38,6 +39,8 @@ def main():
     time_steps = args.time_steps
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    print(f'Using device:{device}')
+    # device = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
 
     # Model instance
     if args.conditional:
@@ -71,12 +74,16 @@ def main():
         num_heads_upsample=args.attn_heads_upsample,
         use_scale_shift_norm=True,
     )
+    dids = [int(gpu) for gpu in os.environ['CUDA_VISIBLE_DEVICES'].split(',')]
+    print(dids)
+    model = torch.nn.DataParallel(model, device_ids=dids)
     params = sum([p.data.nelement() for p in model.parameters()])
     print(f"Number of parameters in the model are: {params}")
     model.to(device)
     # Compile the model
-    model = torch.compile(model)
-    torch.set_float32_matmul_precision("high")
+    #print('Compiling the model..')
+    #model = torch.compile(model)
+    #torch.set_float32_matmul_precision("high")
 
     # Loss and Optimizer
     criterion = nn.MSELoss()
@@ -99,16 +106,24 @@ def main():
             epoch_loss += mse_loss.item()
 
             if i % 100 == 0:
-                print(i, epoch_loss / (i + 1))
-        if epoch % 20 == 0:
-            for input, class_labels in val_loader:
-                sample_DDPM(
-                    class_labels=class_labels,
-                    model=model,
-                    max_steps=time_steps,
-                    input_shape=input.shape,
-                )
-                break
+                print(i, epoch_loss / (i + 1), flush=True)
+
+        if epoch % 10 == 0:
+            with torch.no_grad():
+                model.eval()
+                torch.save(model.module.state_dict(), os.path.join(checkpoint_dir,f' model_{epoch}.pt'))
+                print('Sampling validation set...')
+                for input, class_labels in val_loader:
+                    x_0 = sample_DDPM(
+                        class_labels=class_labels,
+                        model=model.module,
+                        max_steps=time_steps,
+                        input_=input,
+                        device=device
+                    )
+                    os.makedirs('./interim_samples/', exist_ok=True)
+                    torch.save(x_0, f'./interim_samples/tensor_{epoch}.pt')
+                    break
 
 
 def load_input(input_imgs: torch.Tensor, time_steps: int):
