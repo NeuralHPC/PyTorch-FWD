@@ -5,6 +5,7 @@ import torch
 import ptwt
 import pywt
 import torch.nn.functional as F
+import numpy as np
 
 
 def get_freq_order(level: int):
@@ -85,27 +86,26 @@ def forward_wavelet_packet_transform(
     max_level: int = 3,
     log_scale: bool = False,
 ) -> torch.Tensor:
-    
+    print(tensor.dim())
     packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=max_level)
     packet_list = []
-    
+
     for node in packets.get_natural_order(max_level):
         packet = torch.squeeze(packets[node], dim=1)
         packet_list.append(packet)
     wp_pt_rs = torch.stack(packet_list, axis=1)
-
     if log_scale:
         wp_pt_rs = torch.log(torch.abs(wp_pt_rs) + 1e-12)
 
     return wp_pt_rs
 
 
-def generate_frequency_packet_image(packet_tensor: torch.Tensor, degree: int):
+def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
     """Create a ready-to-polt image with frequency-order packages.
        Given a packet array in natural order, creat an image which is
        ready to plot in frequency order.
     Args:
-        packet_array (torch.Tensor): [packet_no, packet_height, packet_width]
+        packet_array (np.ndarray): [packet_no, packet_height, packet_width]
             in natural order.
         degree (int): The degree of the packet decomposition.
     Returns:
@@ -119,24 +119,25 @@ def generate_frequency_packet_image(packet_tensor: torch.Tensor, degree: int):
         row = []
         for row_path in row_paths:
             index = wp_natural_path.index(row_path)
-            packet = packet_tensor[:, index]
+            packet = packet_array[:, index]
             row.append(packet)
-        image.append(torch.concatenate(row, -2))
-    return torch.concatenate(image, -3)
+        image.append(np.concatenate(row, -1))
+    return np.concatenate(image, 2)
 
 
 def inverse_wavelet_packet_transform(
     packet_tensor: torch.Tensor, wavelet: str, max_level: int
 ):
-    batch, _, channels, _,  _ = packet_tensor.shape
+    batch, _, channels, _, _ = packet_tensor.shape
+
     def get_node_order(level):
         wp_natural_path = list(product(["a", "h", "v", "d"], repeat=level))
         return ["".join(p) for p in wp_natural_path]
-    
+
     wp_dict = {}
     for pos, path in enumerate(get_node_order(max_level)):
         wp_dict[path] = packet_tensor[:, pos, :, :, :]
-    
+
     for level in reversed(range(max_level)):
         for node in get_node_order(level):
             data_a = fold_channels(wp_dict[node + "a"])
@@ -156,7 +157,9 @@ def inverse_wavelet_packet_transform(
     return rec
 
 
-def fourier_power_divergence(output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def fourier_power_divergence(
+    output: torch.Tensor, target: torch.Tensor
+) -> torch.Tensor:
     """Power spectrum entropy metric as presented in:
     https://openaccess.thecvf.com/content_ICCV_2019/papers/Hernandez_Human_Motion_Prediction_via_Spatio-Temporal_Inpainting_ICCV_2019_paper.pdf
 
