@@ -123,9 +123,22 @@ def get_dataloaders(
                 ]
             ),
         )
+    elif dataset_name.lower() == "cifar10":
+        train_set = datasets.CIFAR10(
+            "../cifar_data",
+            download=True,
+            train=True,
+            transform=transforms.Compose([transforms.ToTensor()]),
+        )
+        val_set = datasets.CIFAR10(
+            "../cifar_data",
+            download=True,
+            train=False,
+            transform=transforms.Compose([transforms.ToTensor()]),
+        )
     elif dataset_name.lower() == "celeba":
         raise NotImplementedError
 
     trainloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    valloader = DataLoader(val_set, batch_size=1, shuffle=False)
+    valloader = DataLoader(val_set, batch_size=10, shuffle=False)
     return trainloader, valloader
