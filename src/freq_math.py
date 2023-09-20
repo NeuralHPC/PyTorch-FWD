@@ -86,7 +86,7 @@ def forward_wavelet_packet_transform(
     max_level: int = 3,
     log_scale: bool = False,
 ) -> torch.Tensor:
-    print(tensor.dim())
+    tensor = tensor.type(torch.FloatTensor)
     packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=max_level)
     packet_list = []
 
