@@ -72,7 +72,7 @@ class CelabADataset(Dataset):
 
 
 def get_dataloaders(
-    dataset_name: str, batch_size: int, data_path: str = None
+    dataset_name: str, batch_size: int, val_size: int, data_path: str = None
 ) -> Tuple[DataLoader, DataLoader]:
     """Get the dataloaders based on the dataset.
 
@@ -142,5 +142,5 @@ def get_dataloaders(
         raise NotImplementedError
 
     trainloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    valloader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
+    valloader = DataLoader(val_set, batch_size=val_size, shuffle=False)
     return trainloader, valloader

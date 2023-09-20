@@ -22,7 +22,7 @@ def main():
 
     now = datetime.datetime.now()
 
-    writer = SummaryWriter(log_dir=args.logdir, comment="CIFAR10")
+    writer = SummaryWriter(log_dir=args.logdir, comment=f"CIFAR10_{now}")
     checkpoint_dir = os.path.join(args.logdir, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -30,7 +30,7 @@ def main():
 
     # Dataloaders
     train_loader, val_loader = get_dataloaders(
-        dataset_name="cifar10", batch_size=args.batch_size, data_path=None
+        dataset_name="cifar10", batch_size=args.batch_size, val_size=20, data_path=None
     )
     input_shape = ()
     for data, _ in val_loader:
@@ -39,12 +39,11 @@ def main():
     time_steps = args.time_steps
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    print(f'Using device:{device}')
-    # device = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
+    print(f"Using device:{device}")
 
     # Model instance
     if args.conditional:
-        print("Note: Using class conditional.")  #
+        print("Note: Using class conditional.")
         num_classes = 1000
 
     if args.attn_heads_upsample == -1:
@@ -74,16 +73,16 @@ def main():
         num_heads_upsample=args.attn_heads_upsample,
         use_scale_shift_norm=True,
     )
-    dids = [int(gpu) for gpu in os.environ['CUDA_VISIBLE_DEVICES'].split(',')]
+    dids = [int(gpu) for gpu in os.environ["CUDA_VISIBLE_DEVICES"].split(",")]
     print(dids)
     model = torch.nn.DataParallel(model, device_ids=dids)
     params = sum([p.data.nelement() for p in model.parameters()])
     print(f"Number of parameters in the model are: {params}")
     model.to(device)
-    # Compile the model
-    #print('Compiling the model..')
-    #model = torch.compile(model)
-    #torch.set_float32_matmul_precision("high")
+    # # Compile the model
+    # print('Compiling the model..')
+    # model = torch.compile(model)
+    # torch.set_float32_matmul_precision("high")
 
     # Loss and Optimizer
     criterion = nn.MSELoss()
@@ -102,28 +101,42 @@ def main():
             pred_noise = model(x, current_steps, class_label)
             mse_loss = criterion(pred_noise, y)
             mse_loss.backward()
+            try:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            except Exception:
+                pass
             optimizer.step()
             epoch_loss += mse_loss.item()
 
             if i % 100 == 0:
                 print(i, epoch_loss / (i + 1), flush=True)
 
-        if epoch % 10 == 0:
+        if epoch % 100 == 0:
             with torch.no_grad():
                 model.eval()
-                torch.save(model.module.state_dict(), os.path.join(checkpoint_dir,f' model_{epoch}.pt'))
-                print('Sampling validation set...')
+                if epoch % 1000 == 0:
+                    torch.save(
+                        model.module.state_dict(),
+                        os.path.join(checkpoint_dir, f"model_{epoch}.pt"),
+                    )
+                print("Sampling validation set...")
                 for input, class_labels in val_loader:
                     x_0 = sample_DDPM(
                         class_labels=class_labels,
                         model=model.module,
                         max_steps=time_steps,
                         input_=input,
-                        device=device
+                        device=device,
                     )
-                    os.makedirs('./interim_samples/', exist_ok=True)
-                    torch.save(x_0, f'./interim_samples/tensor_{epoch}.pt')
+                    os.makedirs("./interim_samples/", exist_ok=True)
+                    torch.save(x_0, f"./interim_samples/tensor_{epoch}.pt")
                     break
+
+    # Save at the end of training
+    torch.save(
+        model.module.state_dict(),
+        os.path.join(checkpoint_dir, f"model_{args.epochs}.pt"),
+    )
 
 
 def load_input(input_imgs: torch.Tensor, time_steps: int):
