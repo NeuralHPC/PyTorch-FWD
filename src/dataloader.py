@@ -141,6 +141,8 @@ def get_dataloaders(
     elif dataset_name.lower() == "celeba":
         raise NotImplementedError
 
-    trainloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    valloader = DataLoader(val_set, batch_size=val_size, shuffle=False)
+    trainloader = DataLoader(
+        train_set, batch_size=batch_size, shuffle=True, num_workers=48
+    )
+    valloader = DataLoader(val_set, batch_size=val_size, shuffle=False, num_workers=48)
     return trainloader, valloader

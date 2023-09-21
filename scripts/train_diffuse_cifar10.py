@@ -90,7 +90,7 @@ def main():
 
     # Training loop
     for epoch in range(args.epochs):
-        print(f"Epoch: {epoch}")
+        print(f"Epoch: {epoch}", flush=True)
         model.train()
         epoch_loss = 0.0
         for i, (input, class_label) in enumerate(train_loader):
@@ -114,7 +114,7 @@ def main():
         if epoch % 100 == 0:
             with torch.no_grad():
                 model.eval()
-                if epoch % 1000 == 0:
+                if epoch % 300 == 0:
                     torch.save(
                         model.module.state_dict(),
                         os.path.join(checkpoint_dir, f"model_{epoch}.pt"),
