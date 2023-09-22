@@ -8,7 +8,7 @@ sample_dir = "./sample_imgs"
 os.makedirs(sample_dir, exist_ok=True)
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-_, val_loader = get_dataloaders("cifar10", 2500, ".")
+train_loader, val_loader = get_dataloaders("cifar10", 2500, 2500, ".")
 
 model = Improv_UNet(
     in_channels=3,
@@ -25,23 +25,21 @@ model = Improv_UNet(
 )
 
 model = model.to(device)
-model.load_state_dict(torch.load("./log/checkpoints/ model_290.pt"))
+model.load_state_dict(torch.load("./log/checkpoints/model_1000.pt"))
 with torch.no_grad():
     model.eval()
     imgs = []
     count = 0
-    for input, class_labels in val_loader:
+    for input_, class_labels in train_loader:
         x_0 = sample_DDPM(
             class_labels=class_labels,
             model=model,
             max_steps=1000,
-            input_=input,
+            input_=input_,
             device=device,
         )
         count += 1
         print(x_0.shape, count)
         imgs.append(x_0)
-        if count >= 2:
-            break
     img = torch.concat(imgs, axis=0)
     torch.save(img, os.path.join(sample_dir, "sampled_tensors.pt"))
