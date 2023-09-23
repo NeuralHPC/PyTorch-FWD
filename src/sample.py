@@ -108,7 +108,13 @@ def sample_noise(
 #     return process_array[0]
 
 
-def sample_DDPM(class_labels: torch.Tensor, model: nn.Module, max_steps: int, input_: List[int], device: torch.device) -> torch.Tensor:
+def sample_DDPM(
+    class_labels: torch.Tensor,
+    model: nn.Module,
+    max_steps: int,
+    input_: List[int],
+    device: torch.device,
+) -> torch.Tensor:
     """DDPM Sampling from https://arxiv.org/pdf/2006.11239.pdf.
 
     Args:
@@ -125,9 +131,6 @@ def sample_DDPM(class_labels: torch.Tensor, model: nn.Module, max_steps: int, in
     x_t = torch.randn_like(input_, device=device)
     x_t_1 = x_t
     class_labels = class_labels.to(device)
-    betas = torch.linspace(0.0001, 0.02, max_steps)
-    alphas = 1 - betas
-    alphas_ts = torch.cumprod(alphas, dim=0)
     from tqdm.auto import tqdm
 
     for time in tqdm(reversed(range(max_steps)), total=max_steps):
@@ -135,8 +138,10 @@ def sample_DDPM(class_labels: torch.Tensor, model: nn.Module, max_steps: int, in
         z = torch.randn_like(x_t_1, device=device)
         time = torch.unsqueeze(torch.tensor(time, device=device), dim=-1)
         denoise = model(x_t_1, time, class_labels)
-        x_mean = (x_t_1 - (denoise * ((1 - alpha) / ((1-alpha_t)**0.5)))) / ( alpha ** 0.5 )
-        x_t_1 = x_mean + ((1-alpha) ** 0.5) * z
+        x_mean = (x_t_1 - (denoise * ((1 - alpha) / ((1 - alpha_t) ** 0.5)))) / (
+            alpha**0.5
+        )
+        x_t_1 = x_mean + ((1 - alpha) ** 0.5) * z
     return x_t_1
 
 

@@ -124,12 +124,17 @@ def get_dataloaders(
             ),
         )
     elif dataset_name.lower() == "cifar10":
+        # TODO: Get these normalize values from the config file later
+        normalize = transforms.Normalize(
+            mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761]
+        )
+
         train_set = datasets.CIFAR10(
             "../cifar_data",
             download=True,
             train=True,
             transform=transforms.Compose(
-                [transforms.RandomHorizontalFlip(), transforms.ToTensor()]
+                [transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize]
             ),
         )
         val_set = datasets.CIFAR10(

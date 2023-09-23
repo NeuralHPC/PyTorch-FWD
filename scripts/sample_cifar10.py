@@ -3,6 +3,7 @@ import os
 from src.sample import sample_DDPM
 from src.improved_UNet import Improv_UNet
 from src.dataloader import get_dataloaders
+from config.cifar10 import dataset
 
 sample_dir = "./sample_imgs"
 os.makedirs(sample_dir, exist_ok=True)
@@ -30,6 +31,8 @@ with torch.no_grad():
     model.eval()
     imgs = []
     count = 0
+    std = torch.reshape(torch.tensor(dataset["std"]), (1, 3, 1, 1)).to(device)
+    mean = torch.reshape(torch.tensor(dataset["mean"]), (1, 3, 1, 1)).to(device)
     for input_, class_labels in train_loader:
         x_0 = sample_DDPM(
             class_labels=class_labels,
@@ -39,6 +42,7 @@ with torch.no_grad():
             device=device,
         )
         count += 1
+        x_0 = (x_0 * std) + mean
         print(x_0.shape, count)
         imgs.append(x_0)
     img = torch.concat(imgs, axis=0)
