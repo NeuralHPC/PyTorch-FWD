@@ -10,7 +10,6 @@ import sys
 import argparse
 import os
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
 model_id: Dict[str, List[Any]] = {
     "cifar10-32": ["google/ddpm-cifar10-32", 50000],
@@ -24,7 +23,7 @@ def main(scheduler_nm: str, dataset: str, input_shape: int) -> None:
     global model_id
     diffusion_steps = 1000
     batch_size = 1
-    device = "mps"  # Change this to "cuda" in case of linux
+    device = "cuda"
     diffusion_sampler = (
         DDIMParallelScheduler
         if scheduler_nm.upper() == "DDIM"
@@ -63,8 +62,6 @@ def main(scheduler_nm: str, dataset: str, input_shape: int) -> None:
                 input = prev_noisy_sample
             images = (input / 2 + 0.5).clamp(0, 1)
             np_images = images.cpu().permute(0, 2, 3, 1).numpy()
-            plt.imshow(np_images[0])
-            plt.show()
             fpath = os.path.join(sample_path, f"batch_{batch+1}.npz")
             np.savez(fpath, x=np_images)
             print(f"Saving the batch {fpath.split('/')[-1]}")
