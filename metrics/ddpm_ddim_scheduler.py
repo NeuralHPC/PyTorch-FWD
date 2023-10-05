@@ -1,18 +1,17 @@
-from diffusers import (
-    UNet2DModel,
-    DDPMScheduler,
-    DDIMScheduler,
-)
-from typing import Dict, List, Any
 import torch
-torch.cuda.empty_cache()
-import numpy as np
-import sys
-import argparse
 import os
+import sys
+import math
+import argparse
+import time
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
 from tqdm import tqdm
+from diffusers import DDIMScheduler, UNet2DModel, DDPMScheduler
+import numpy as np
 
-model_id: Dict[str, List[Any]] = {
+
+model_id = {
     "cifar10-32": ["google/ddpm-cifar10-32", 50000],
     "celebahq-256": ["google/ddpm-celebahq-256", 30000],
     "church-256": ["google/ddpm-church-256", 30000],
@@ -20,14 +19,44 @@ model_id: Dict[str, List[Any]] = {
 }
 
 
-def main(scheduler_nm: str, dataset: str, input_shape: int, start_batch: int) -> None:
+class Trainer:
+    def __init__(
+        self, model, global_seed, scheduler, img_size, batch_size, sample_path
+    ):
+        self.local_rank = int(os.environ["LOCAL_RANK"])
+        self.global_rank = int(os.environ["RANK"])
+        self.model = model.to(self.local_rank)
+        self.model = DDP(self.model, device_ids=[self.local_rank])
+        self.seed = global_seed + self.global_rank
+        self.scheduler = scheduler
+        self.noise_img_shape = (batch_size, 3, img_size, img_size)
+        self.sample_path = sample_path
+
+    def sample(self, total_batches):
+        with torch.no_grad():
+            for batch in range(total_batches):
+                noise = torch.randn(self.noise_img_shape).to(self.local_rank)
+                input = noise
+                for t in tqdm(self.scheduler.timesteps):
+                    noisy_res = self.model(input, t).sample
+                    prev_noisy_sample = self.scheduler.step(
+                        noisy_res, t, input
+                    ).prev_sample
+                    input = prev_noisy_sample
+                images = (input / 2 + 0.5).clamp(0, 1)
+                np_images = images.cpu().permute(0, 2, 3, 1).numpy()
+                # print(f"[GPU: {self.global_rank}], Img shape: {np_images.shape}")
+                str_time = str(time.time()).replace(".", "_")
+                fname = f"batch_{str_time}.npz"
+                fpath = os.path.join(self.sample_path, fname)
+                np.savez(fpath, x=np_images)
+                print(f"Saved batch at {fname}", flush=True)
+
+
+def main(scheduler_nm: str, dataset: str, input_shape: int):
     global model_id
-    diffusion_steps = 1000
-    batch_size = 100
-    device = "cuda"  # Change this to "cuda" in case of linux
-    diffusion_sampler = (
-        DDIMScheduler if scheduler_nm.upper() == "DDIM" else DDPMScheduler
-    )
+    torch.backends.cuda.matmul.allow_tf32 = True
+    init_process_group(backend="nccl")
 
     try:
         model_name, num_samples = model_id[f"{dataset.lower()}-{input_shape}"]
@@ -35,35 +64,29 @@ def main(scheduler_nm: str, dataset: str, input_shape: int, start_batch: int) ->
         print("Model doesn't exist for given dataset and input shape.")
         print(f"Supported datasets with image shapes are {model_id.keys()}")
         sys.exit(0)
+    batch_size = 50
 
+    diffusion_sampler = (
+        DDIMScheduler if scheduler_nm.upper() == "DDIM" else DDPMScheduler
+    )
     scheduler = diffusion_sampler.from_pretrained(model_name)
     model = UNet2DModel.from_pretrained(model_name)
-    model = torch.compile(model).to(device)
-
-    scheduler.set_timesteps(diffusion_steps)
-
+    scheduler.set_timesteps(1000)
+    total_batches = int(
+        math.ceil(num_samples / (batch_size * torch.distributed.get_world_size()))
+    )
+    global_rank = int(os.environ["RANK"])
     sample_path = f"./sample_imgs_{dataset}_{input_shape}_{scheduler_nm}"
     os.makedirs(sample_path, exist_ok=True)
-    print(f"Saving the sampled images at {sample_path}", flush=True)
-    img_size = model.config.sample_size
+    if global_rank == 0:
+        print(f"Running {total_batches} number of batches for sampling", flush=True)
+        print(f"Saving the sampled images at {sample_path}", flush=True)
 
-    total_batches = num_samples // batch_size
-    print(
-        f"Overall {total_batches} number of batches needs to be processed.", flush=True
+    trainer = Trainer(
+        model, 0, scheduler, model.config.sample_size, batch_size, sample_path
     )
-    with torch.no_grad():
-        for batch in range(start_batch, total_batches):
-            noise = torch.randn((batch_size, 3, img_size, img_size)).to(device)
-            input = noise
-            for t in tqdm(scheduler.timesteps):
-                noisy_residual = model(input, t).sample
-                prev_noisy_sample = scheduler.step(noisy_residual, t, input).prev_sample
-                input = prev_noisy_sample
-            images = (input / 2 + 0.5).clamp(0, 1)
-            np_images = images.cpu().permute(0, 2, 3, 1).numpy()
-            fpath = os.path.join(sample_path, f"batch_{batch+1}.npz")
-            np.savez(fpath, x=np_images)
-            print(f"Saving the batch {fpath.split('/')[-1]}")
+    trainer.sample(total_batches)
+    destroy_process_group()
 
 
 if __name__ == "__main__":
@@ -86,15 +109,8 @@ if __name__ == "__main__":
         default="DDIM",
         help="Select between DDIM and DDPM sampling.",
     )
-    parser.add_argument(
-        "--start-batch",
-        type=int,
-        default=0,
-        help="Batch to start sampling with (currently works only with unconditional image generation.)"
-    )
     args = parser.parse_args()
     scheduler = args.scheduler
     dataset = args.dataset
     input_shape = args.input_shape
-    start_batch = args.start_batch
-    main(scheduler, dataset, input_shape, start_batch)
+    main(scheduler, dataset, input_shape)
