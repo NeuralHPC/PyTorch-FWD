@@ -1,10 +1,11 @@
 from diffusers import (
     UNet2DModel,
-    DDPMParallelScheduler,
-    DDIMParallelScheduler,
+    DDPMScheduler,
+    DDIMScheduler,
 )
 from typing import Dict, List, Any
 import torch
+torch.cuda.empty_cache()
 import numpy as np
 import sys
 import argparse
@@ -19,15 +20,13 @@ model_id: Dict[str, List[Any]] = {
 }
 
 
-def main(scheduler_nm: str, dataset: str, input_shape: int) -> None:
+def main(scheduler_nm: str, dataset: str, input_shape: int, start_batch: int) -> None:
     global model_id
     diffusion_steps = 1000
-    batch_size = 1
-    device = "cuda"
+    batch_size = 100
+    device = "cuda"  # Change this to "cuda" in case of linux
     diffusion_sampler = (
-        DDIMParallelScheduler
-        if scheduler_nm.upper() == "DDIM"
-        else DDPMParallelScheduler
+        DDIMScheduler if scheduler_nm.upper() == "DDIM" else DDPMScheduler
     )
 
     try:
@@ -53,7 +52,7 @@ def main(scheduler_nm: str, dataset: str, input_shape: int) -> None:
         f"Overall {total_batches} number of batches needs to be processed.", flush=True
     )
     with torch.no_grad():
-        for batch in range(total_batches):
+        for batch in range(start_batch, total_batches):
             noise = torch.randn((batch_size, 3, img_size, img_size)).to(device)
             input = noise
             for t in tqdm(scheduler.timesteps):
@@ -87,8 +86,15 @@ if __name__ == "__main__":
         default="DDIM",
         help="Select between DDIM and DDPM sampling.",
     )
+    parser.add_argument(
+        "--start-batch",
+        type=int,
+        default=0,
+        help="Batch to start sampling with (currently works only with unconditional image generation.)"
+    )
     args = parser.parse_args()
     scheduler = args.scheduler
     dataset = args.dataset
     input_shape = args.input_shape
-    main(scheduler, dataset, input_shape)
+    start_batch = args.start_batch
+    main(scheduler, dataset, input_shape, start_batch)
