@@ -169,3 +169,10 @@ class CheckpointFunction(torch.autograd.Function):
         del ctx.input_params
         del output_tensors
         return (None, None) + input_grads
+
+
+def get_loss_fn(loss_type: str):
+    if loss_type.lower() == 'mse':
+        return nn.MSELoss()
+    else:
+        return NotImplementedError

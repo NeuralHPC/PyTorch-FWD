@@ -5,6 +5,9 @@ from typing import Dict, Tuple
 import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets, io, transforms
+from torch.utils.data.distributed import DistributedSampler
+
+from .sample import sample_noise, linear_noise_scheduler
 
 
 class CelebAHQDataset(Dataset):
@@ -72,7 +75,7 @@ class CelabADataset(Dataset):
 
 
 def get_dataloaders(
-    dataset_name: str, batch_size: int, val_size: int, data_path: str = None
+    dataset_name: str, batch_size: int, val_size: int, data_path: str = None, only_datasets: bool = True
 ) -> Tuple[DataLoader, DataLoader]:
     """Get the dataloaders based on the dataset.
 
@@ -80,9 +83,10 @@ def get_dataloaders(
         dataset_name (str): Name of the dataset
         batch_size (int): Batch size
         data_path (str, optional): Path to dataset. Defaults to None.
+        only_datasets (bool, optional): Return only datasets. Defaults to True.
 
     Returns:
-        Tuple[DataLoader, DataLoader]: A tuple containing train and validation dataloaders
+        Tuple[DataLoader, DataLoader]: A tuple containing train and validation dataloaders/datasets
     """
     train_set, val_set = None, None
     if dataset_name.lower() == "mnist":
@@ -146,8 +150,34 @@ def get_dataloaders(
     elif dataset_name.lower() == "celeba":
         raise NotImplementedError
 
+    if only_datasets:
+        return train_set, val_set
+
     trainloader = DataLoader(
         train_set, batch_size=batch_size, shuffle=True, num_workers=48
     )
     valloader = DataLoader(val_set, batch_size=val_size, shuffle=False, num_workers=48)
     return trainloader, valloader
+
+
+
+def get_distributed_dataloader(dataset, world_size, rank, global_seed, batch_size, num_workers):
+    sampler = DistributedSampler(
+        dataset, num_replicas=world_size,
+        rank=rank, shuffle=True, seed=global_seed
+    )
+    return DataLoader(
+        dataset, batch_size=batch_size//world_size,
+        shuffle=True, sampler=sampler,
+        num_workers=num_workers, pin_memory=True, drop_last=True
+    ), sampler
+
+
+def load_input(input_imgs: torch.Tensor, time_steps: int):
+    current_steps = torch.randint(high=time_steps, size=[input_imgs.shape[0]])
+    alphas_t = torch.tensor(
+        [linear_noise_scheduler(time, time_steps)[0] for time in current_steps]
+    ).reshape(len(current_steps), 1)
+    batch_map = torch.vmap(sample_noise, randomness="different")
+    x, y = batch_map(input_imgs, alphas_t)
+    return x, y, current_steps
