@@ -6,22 +6,27 @@ from pytorch_fid.fid_score import calculate_frechet_distance
 from tqdm import tqdm
 from torch.nn.functional import adaptive_avg_pool2d
 import numpy as np
+import glob, os
 import json
-from torchvision import transforms
+import shutil
+from torchvision import transforms, datasets
+from PIL import Image
+from config import cifar10
 
-from src.dataloader import get_dataloaders
+from src.freq_math import fourier_power_divergence, wavelet_packet_power_divergence
 
 
 class ImagePathDataset(torch.utils.data.Dataset):
-    def __init__(self, files, transforms=None):
-        self.files = files
-        self.transforms = transforms
+    def __init__(self, data_path, transforms_=None):
+        self.images = glob.glob(os.path.join(data_path, '*.png'))
+        self.transforms = transforms_
 
     def __len__(self):
-        return len(self.files)
+        return len(self.images)
 
-    def __getitem__(self, i):
-        img = self.files[i]
+    def __getitem__(self, idx):
+        img_name = self.images[idx]
+        img = Image.open(img_name).convert('RGB')
         if self.transforms is not None:
             img = self.transforms(img)
         return img
@@ -61,11 +66,10 @@ def get_activations(num_images, dataloader, model, dims, device):
         batch = batch.to(device)
 
         # Map to [0, 255], quantize, then map to [0, 1]
-        batch -= batch.min()
-        batch *= 255 / batch.max()
-        batch = batch.int().float() / 255
+        # batch -= batch.min()
+        # batch *= 255 / batch.max()
+        # batch = batch.int().float() / 255
         if start_idx == 0:
-            print(type(batch))
             print(f"Got batch with stats {tensor_summary_stats(batch)}")
 
         with torch.no_grad():
@@ -123,7 +127,6 @@ def compute_FID(
     """
     print(f"Using dims: {dims}")
     block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
-    print(block_idx)
     model = InceptionV3([block_idx]).to(device)
     mean_ref, cov_ref = calculate_activation_statistics(
         50000, orig_dl, model, dims, device
@@ -135,33 +138,103 @@ def compute_FID(
     return fid
 
 
+def compute_PSKL(original_loader, sample_loader, length):
+    pskl_fft_mean = []
+    pskl_pakt_mean = []
+    for _ in range(length):
+        orig_data, _ = next(iter(original_loader))
+        sample_data = next(iter(sample_loader))
+        pskl_fft = fourier_power_divergence(orig_data, sample_data)
+        pskl_fft_mean.append(pskl_fft)
+        pskl_pakt = wavelet_packet_power_divergence(orig_data, sample_data)
+        pskl_pakt_mean.append(pskl_pakt)
+    assert len(pskl_fft_mean) != 0
+    assert len(pskl_pakt_mean) != 0
+    return sum(pskl_fft_mean)/len(pskl_fft_mean), sum(pskl_pakt_mean)/len(pskl_pakt_mean)
+
+
+
+
 def main():
     dataset_name = "CIFAR10"
+    config_name = cifar10 if dataset_name.upper() == 'CIFAR10' else None
     data_path = "."
-    train_loader, _ = get_dataloaders(dataset_name, 500, 2000, data_path)
-    orig_data_lst = []
-    for input_, _ in train_loader:
-        orig_data_lst.append(input_)
-    orig_data = torch.concatenate(orig_data_lst, dim=0)
-    print(orig_data.shape)
+    bs = 50
+    input_folder_path = None
 
-    sampled_data = torch.load(
-        "./sample_imgs/sampled_tensors.pt", map_location=torch.device("cpu")
+    sampled_folder_path = '/home/lveerama/results/metrics_sampled_images/DDIM/sample_imgs_cifar10_32_DDIM/'
+    sampled_data_path = os.path.join(sampled_folder_path, 'sample_imgs')
+    if not os.path.isdir(sampled_data_path):
+        npz_files = glob.glob(f'{sampled_folder_path}*.npz')
+        if len(npz_files) == 0:
+            raise ValueError("Please feed the folder with images individually or npz format")
+        print("Found data as in npz files, extracting to the sample_imgs folder")
+        sample_save_path = os.path.join(sampled_folder_path, 'sample_imgs')
+        os.makedirs(sample_save_path, exist_ok=True)
+        counter = 1
+        for file in npz_files:
+            batched_images = np.load(file)['x']
+            for idx in range(len(batched_images)):
+                fn = os.path.join(sample_save_path, f'{counter:06d}.png')
+                im = Image.fromarray((batched_images[idx, :, :, :]*255.).astype(np.uint8))
+                im.save(fn)
+                counter += 1
+    else:
+        print(f"Found individual images in the folder {sampled_data_path}")
+    
+    normalize = transforms.Normalize(
+        mean = config_name.dataset['mean'],
+        std = config_name.dataset['std']
     )
-    # rescale_fn = lambda x: (x - torch.min(x)) / (torch.max(x) - torch.min(x))
-    # sampled_data = torch.stack([rescale_fn(img) for img in sampled_data], dim=0)
-    print(sampled_data.shape)
 
-    sampled_dl = torch.utils.data.DataLoader(
-        ImagePathDataset(sampled_data, None), batch_size=500
+    if dataset_name.upper() == "CIFAR10":
+        input_transforms = False
+        train_set = datasets.CIFAR10(
+            "../cifar_data",
+            download=True,
+            train=True,
+            transform=transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    # normalize
+                 ]
+            ),)
+
+    data_transforms = transforms.Compose([
+        transforms.ToTensor(),
+        #normalize
+    ])
+
+    sampled_set = ImagePathDataset(data_path=sampled_data_path, transforms_=data_transforms)
+
+    sampled_loader = torch.utils.data.DataLoader(
+        sampled_set, batch_size = bs, shuffle=False, drop_last = False, num_workers=8
     )
-    orig_dl = torch.utils.data.DataLoader(
-        ImagePathDataset(orig_data, None), batch_size=500
+
+    original_loader = torch.utils.data.DataLoader(
+        train_set, batch_size = bs, shuffle=False, drop_last = False, num_workers=8
     )
 
-    fid = compute_FID(orig_dl, sampled_dl, "cuda", 2048)
-    print(fid)
+        
+    metrics = {}
+    comp_feats = [64, 192] if dataset_name.upper() == 'CIFAR10' else [768, 2048]
+    fid = {}
+    for feat in comp_feats:
+        fid_feat = compute_FID(original_loader, sampled_loader, "cuda", feat)
+        print(fid_feat)
+        fid[feat] = fid_feat
+    metrics['FID'] = fid
 
+    fft, packet = compute_PSKL(original_loader, sampled_loader, len(original_loader))
+    metrics['PSKL_FFT'] = fft.item()
+    metrics['PSKL_PACKET'] = packet.item()
+
+
+    metrics_fn = os.path.join(sampled_folder_path, 'metrics.txt')
+    with open(metrics_fn, 'w') as file:
+        file.write(json.dumps(metrics))
+
+    shutil.rmtree(sampled_data_path)
 
 if __name__ == "__main__":
     main()

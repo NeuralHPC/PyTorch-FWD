@@ -177,7 +177,7 @@ def fourier_power_divergence(
     output_power = radius_no_sqrt(output_fft)
     target_fft = torch.fft.fft2(target)
     target_power = radius_no_sqrt(target_fft)
-    return torch.mean(F.kl_div(torch.log(output_power), target_power))
+    return torch.mean(F.kl_div(torch.log(output_power + 1e-8), target_power))
 
 
 def wavelet_packet_power_divergence(
@@ -207,4 +207,4 @@ def wavelet_packet_power_divergence(
 
     output_energy = output_packets**2
     target_energy = target_packets**2
-    return torch.mean(F.kl_div(torch.log(output_energy), target_energy))
+    return torch.mean(F.kl_div(torch.log(output_energy + 1e-8), target_energy))
