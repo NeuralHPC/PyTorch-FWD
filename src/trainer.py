@@ -1,117 +1,150 @@
 """Torch DDP training script for diffusion."""
-import os
+import argparse
+import os.path
+from typing import Tuple
 
 import torch
-
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
-import torch.distributed as dist
+import torch.nn as nn
+import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
-from time import time
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
-from .dataloader import get_distributed_dataloader, load_input
-from .nn import get_loss_fn
-
-
-def clean_ddp():
-    """
-    Clear process group.
-    """
-    dist.destroy_process_group()
+from src.sample import linear_noise_scheduler, sample_noise
+from util import _get_global_rank, _get_local_rank
 
 
-def logger():
-    raise NotImplementedError
+class Trainer:
+    def __init__(self,
+                 model: nn.Module,
+                 args: argparse.Namespace,
+                 optimizer: optim.Optimizer,
+                 loss_fn: nn.Module,
+                 writer: SummaryWriter
+                 ) -> None:
+        """DDP Train class.
 
+        Args:
+            model (nn.Module): Model Instance
+            args (argparse.Namespace): User defined arguments
+            optimizer (optim.Optimizer): Optimizer
+            loss_fn (nn.Module): Loss function
+            writer (SummaryWriter): tensorboard writer object
+        """
+        # Initialize ranks of device.
+        self.__local_rank = _get_local_rank()
+        self.__global_rank = self.__local_rank
+        if args.multinode:
+            self.__global_rank = _get_global_rank()
 
-def train(model, datasets, log_direc, train_args):
-    """Training model DDP."""
-    assert torch.cuda.is_available(), "Need atleast one GPU for training.."
+        # Initialize the model.
+        self.model = model.to(self.__local_rank)
+        if os.path.exists(args.model_path):
+            if self.__global_rank == 0:
+                self.__load_checkpoint(args.model_path)
+        self.model = DDP(self.model, device_ids=[self.__local_rank])
 
-    dist.init_process_group("nccl")  # NCCL backend for distributed training.
-    world_size = dist.get_world_size()
-    rank = dist.get_rank()
+        # Initialize training variables
+        self.__optimizer = optimizer
+        self.__loss_fn = loss_fn
+        self.__tensorboard = writer
+        self.__elapsed_epochs = 0
+        self.__clip_grad_norm = args.clip_grad_norm
+        self.__time_steps = args.time_steps
+        self.__save_every = args.save_every
+        self.__save_path = args.save_path
 
-    assert train_args.batch_size % world_size == 0, "Batch size and world size must be perfectly divisible.."
+    def __load_checkpoint(self, path: str) -> None:
+        """Load the existing checkpoint.
 
-    device = rank % torch.cuda.device_count()
-    local_seed = train_args.global_seed * world_size + rank
-    torch.manual_seed(local_seed)
-    torch.cuda.set_device(device)
+        Args:
+            path (str): Existing model path
+        """
+        checkpoint = torch.load(path)
+        self.model.load_state_dict(checkpoint["model_state"])
+        self.__elapsed_epochs = checkpoint["elapsed_epochs"] + 1
+        print(f"[GPU{self.__global_rank}] Resuming training from epoch: {self.__elapsed_epochs}")
 
-    # TODO: Setup logging here.
+    def __save_checkpoint(self, epoch: int) -> None:
+        """Save checkpoint.
 
-    model = model.to(device)
-    model = DDP(model, device_ids=[rank])
+        Args:
+            epoch (int): Current epoch
+        """
+        checkpoint = {}
+        checkpoint["model_state"] = self.model.moduel.state_dict()
+        checkpoint["elapsed_epochs"] = epoch
+        file_path = os.path.join(self.__save_path, f'model_ckpt_epoch_{epoch}.pt')
+        torch.save(checkpoint, file_path)
+        print(f"===> Checkpoint saved at epoch {epoch} to {file_path}")
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=train_args.lr)
-    criterion = get_loss_fn(train_args.loss)
+    def __train_step(self, dataloader: DataLoader) -> float:
+        """Train for one epoch.
 
-    if isinstance(datasets, tuple):
-        train_set, _ = datasets
-    else:
-        train_set = datasets
-    train_loader, train_sampler = get_distributed_dataloader(train_set,
-                                                             world_size,
-                                                             rank,
-                                                             train_args.global_seed,
-                                                             train_args.batch_size,
-                                                             train_args.num_workers)
+        Args:
+            dataloader (DataLoader): Training dataloader
 
-    model.train()
-    time_steps = train_args.time_steps
-    train_steps = 0
-    running_loss = 0.
-    log_steps = 0
-    start_time = time()
-    for epoch in range(train_args.epochs):
-        train_sampler.set_epoch(epoch)
-        for i, (input_img, class_label) in enumerate(train_loader):
-            x, y, current_step = load_input(input_img, time_steps)
-            x, y, class_label = x.to(device), y.to(device), class_label.to(device)
-            current_steps = current_steps.to(device)
-            pred_noise = model(x, current_steps, class_label)
-            loss_val = criterion(pred_noise, y)
-            optimizer.zero_grad()
+        Returns:
+            float: Epoch loss
+        """
+        self.model.train()
+        per_step_loss = 0.0
+        total_steps = 0
+        for input, class_label in dataloader:
+            # Preprocess and load input to corresponding device.
+            x, y, current_steps = self.__preprocess_input(input)
+            x, y = x.to(self.__local_rank), y.to(self.__local_rank)
+            class_label, current_steps = class_label.to(self.__local_rank), current_steps.to(self.__local_rank)
+
+            # Forward pass and loss calculation
+            self.__optimizer.zero_grad()
+            pred_noise = self.model(x, current_steps, class_label)
+            loss_val = self.__loss_fn(pred_noise, y)
+
+            # Backward pass
             loss_val.backward()
-            # Perform gradient clipping
-            if train_args.clip_value > 0.0:
-                try:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), train_args.clip_value)
-                except Exception:
-                    pass
+            if self.__clip_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm(self.model.parameters(), self.__clip_grad_norm)
+            self.__optimizer.step()
+            per_step_loss += loss_val.item()
+            total_steps += 1
+        avg_loss = per_step_loss / total_steps
+        return avg_loss
 
-            optimizer.step()
+    def train(self, max_epochs: int, dataloader: DataLoader) -> None:
+        """Training loooop.
 
-            running_loss += loss_val.item()
-            log_steps += 1
-            train_steps += 1
+        Args:
+            max_epochs (int): Total epochs
+            dataloader (DataLoader): Training dataloader
+        """
+        for epoch in range(self.__elapsed_epochs, max_epochs):
+            dataloader.sampler.set_epoch(epoch)
+            epoch_loss = self.__train_step(dataloader)
 
-            if train_steps % 100 == 0:
-                torch.cuda.synchronize()
-                end_time = time()
-                steps_per_sec = log_steps / (end_time - start_time)
-                avg_loss = torch.tensor(running_loss / log_steps, device=device)
-                dist.all_reduce(avg_loss, op=dist.ReduceOp.SUM)
-                avg_loss = avg_loss.item() / world_size
-                print(f"Train step: {train_steps:.07d},\
-                        Train Loss: {avg_loss:.4f},\
-                        Steps/Sec: {steps_per_sec:.2f}")
-                running_loss = 0.
-                log_steps = 0
-                start_time = time()
+            if self.__global_rank == 0:
+                print(f"Training loss: {epoch_loss}", flush=True)
+                self.__tensorboard.add_scalar("Train Loss", epoch_loss, epoch)
+                # TODO: Perform sampling of 10 images for evaluation purpose
+                if (epoch % self.__save_every == 0) or (epoch == max_epochs - 1):
+                    self.__save_checkpoint(epoch)
 
-        # Save every 100th epoch or last training epoch
-        if (epoch % 100 == 0 and epoch > 0) or (epoch == train_args.epochs - 1):
-            if rank == 0:
-                check_point = {
-                    "model": model.module.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "train_args": train_args
-                }
-                ckpt_path = f"{log_direc}/checkpoints/"
-                os.makedirs(ckpt_path, exist_ok=True)
-                ckpt_path += f"{epoch}.pt"
-                torch.save(check_point, ckpt_path)
-            dist.barrier()
-    clean_ddp()
+    def __preprocess_input(self, input_imgs: torch.Tensor) -> Tuple[torch.Tensor]:
+        """Apply noising to the input images.
+
+        Args:
+            input_imgs (torch.Tensor): Input images of shape [BSxCxHxW]
+
+        Returns:
+            Tuple[torch.Tensor]: Tuple containing noised input, noise and step values.
+        """
+        current_steps = torch.randint(high=self.__time_steps, size=[input_imgs.shape[0]])
+        alphas_t = torch.tensor(
+            [
+                linear_noise_scheduler(time, self.__time_steps)[0]
+                for time in current_steps
+            ]
+        ).reshape(len(current_steps), 1)
+        batch_map = torch.vmap(sample_noise, randomness="different")
+        x, y = batch_map(input_imgs, alphas_t)
+        return x, y, current_steps

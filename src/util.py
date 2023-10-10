@@ -1,13 +1,20 @@
 import argparse
-import datetime
 import os
-import pickle
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import matplotlib.animation as manimation
 import matplotlib.pyplot as plt
 import numpy as np
-# from flax.core.frozen_dict import FrozenDict
+
+
+def _get_local_rank():
+    """Return local rank."""
+    return int(os.environ["LOCAL_RANK"])
+
+
+def _get_global_rank():
+    """Retrun global rank."""
+    return int(os.environ["RANK"])
 
 
 def _parse_args():
@@ -130,10 +137,10 @@ def _sampler_args():
 
 
 def write_movie(
-    images: List[np.ndarray],
-    name: Optional[str] = "diff_movie",
-    xlim: Optional[int] = 3,
-    ylim: Optional[int] = 3,
+        images: List[np.ndarray],
+        name: Optional[str] = "diff_movie",
+        xlim: Optional[int] = 3,
+        ylim: Optional[int] = 3,
 ):
     """Write the optimization steps into a mp4-movie file.
 
@@ -169,7 +176,6 @@ def write_movie(
         for img in images:
             l.set_data(img / np.max(np.abs(img)))
             writer.grab_frame()
-
 
 # def _save_model(
 #     checkpoint_dir: str,
