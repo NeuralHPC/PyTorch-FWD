@@ -1,14 +1,13 @@
 """Config for CelebA and CelebHQ datasets."""
 
-from dataclasses import dataclass
-from typing import Dict, Any, Union
+from typing import Dict, Any
 
-celeba_path: Union[str, None] = '<path_to_celeba_dataset>'
-celebahq_path: Union[str, None] = '<path_to_celebahq_dataset>'
-
+celeba_path: str = '<path_to_celeba_dataset>'
+celebahq_path: str = '<path_to_celebahq_dataset>'
 
 
-class CelebA64:
+
+class CELEBA64:
     def __init__(self) -> None:
         self.dataset_config: Dict[str, Any] = {
             'random_flip': True,
@@ -34,14 +33,14 @@ class CelebA64:
 
         self.optimizer_config: Dict[str, Any] = {
             'lr': 2e-4,
-            'grad_clip_norm': 1.0  # TODO: Check this again.
+            'clip_grad_norm': 1.0  # TODO: Check this again.
         }
 
-        self.data_dir: Union[str, None] = celeba_path
+        self.data_dir: str = celeba_path
 
 
 
-class CelebAHQ64:
+class CELEBAHQ64:
     def __init__(self) -> None:
         self.dataset_config: Dict[str, Any] = {
             'random_flip': True,
@@ -67,13 +66,13 @@ class CelebAHQ64:
 
         self.optimizer_config: Dict[str, Any] = {
             'lr': 1e-4,
-            'grad_clip_norm': 1.0  # TODO: Check this again.
+            'clip_grad_norm': 1.0  # TODO: Check this again.
         }
 
-        self.data_dir: Union[str, None] = celebahq_path
+        self.data_dir: str = celebahq_path
 
 
-class CelebAHQ128:
+class CELEBAHQ128:
     def __init__(self) -> None:
         self.dataset_config: Dict[str, Any] = {
             'random_flip': True,
@@ -99,7 +98,7 @@ class CelebAHQ128:
 
         self.optimizer_config: Dict[str, Any] = {
             'lr': 1e-4,
-            'grad_clip_norm': 1.0  # TODO: Check this again.
+            'clip_grad_norm': 1.0  # TODO: Check this again.
         }
 
-        self.data_dir: Union[str, None] = celebahq_path
+        self.data_dir: str = celebahq_path

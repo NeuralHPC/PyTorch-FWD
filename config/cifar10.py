@@ -1,9 +1,9 @@
 """Config for CIFAR10."""
 
-from typing import Dict, Any, Union
+from typing import Dict, Any
 
 
-class CIFAR10_Config:
+class CIFAR10:
     def __init__(self)-> None:
         self.dataset_config: Dict[str, Any] = {
             "random_flip": True,
@@ -29,6 +29,6 @@ class CIFAR10_Config:
             "input_size": 32,
         }
 
-        self.optimizer_config: Dict[str, Any] = {"lr": 2e-4, "grad_clip_norm": 1.0}
+        self.optimizer_config: Dict[str, Any] = {"lr": 2e-4, "clip_grad_norm": 1.0}
 
-        self.data_dir: Union[str, None] = None
+        self.data_dir: str = ''

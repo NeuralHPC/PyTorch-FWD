@@ -1,17 +1,17 @@
 """Torch DDP training script for diffusion."""
 import argparse
 import os.path
-from typing import Tuple
+from typing import Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Sampler
 from torch.utils.tensorboard import SummaryWriter
 
 from src.sample import linear_noise_scheduler, sample_noise
-from util import _get_global_rank, _get_local_rank
+from src.util import _get_global_rank, _get_local_rank
 
 
 class Trainer:
@@ -20,7 +20,8 @@ class Trainer:
                  args: argparse.Namespace,
                  optimizer: optim.Optimizer,
                  loss_fn: nn.Module,
-                 writer: SummaryWriter
+                 writer: Union[SummaryWriter, None],
+                 save_path: str,
                  ) -> None:
         """DDP Train class.
 
@@ -29,17 +30,18 @@ class Trainer:
             args (argparse.Namespace): User defined arguments
             optimizer (optim.Optimizer): Optimizer
             loss_fn (nn.Module): Loss function
-            writer (SummaryWriter): tensorboard writer object
+            writer (Union[SummaryWriter, None]): tensorboard writer object for process 0 else None
+            save_path (str): Path to save the model
         """
         # Initialize ranks of device.
         self.__local_rank = _get_local_rank()
         self.__global_rank = self.__local_rank
-        if args.multinode:
+        if args.distribute:
             self.__global_rank = _get_global_rank()
 
         # Initialize the model.
         self.model = model.to(self.__local_rank)
-        if os.path.exists(args.model_path):
+        if os.path.exists(args.model_path) or args.model_path is not None:
             if self.__global_rank == 0:
                 self.__load_checkpoint(args.model_path)
         self.model = DDP(self.model, device_ids=[self.__local_rank])
@@ -52,7 +54,8 @@ class Trainer:
         self.__clip_grad_norm = args.clip_grad_norm
         self.__time_steps = args.time_steps
         self.__save_every = args.save_every
-        self.__save_path = args.save_path
+        self.__save_path = save_path
+        self.__print_every = args.print_every
 
     def __load_checkpoint(self, path: str) -> None:
         """Load the existing checkpoint.
@@ -108,24 +111,28 @@ class Trainer:
             self.__optimizer.step()
             per_step_loss += loss_val.item()
             total_steps += 1
+            if total_steps%self.__print_every == 0:
+                print(f'Step loss: {per_step_loss / total_steps}')
         avg_loss = per_step_loss / total_steps
         return avg_loss
 
-    def train(self, max_epochs: int, dataloader: DataLoader) -> None:
-        """Training loooop.
+    def train(self, max_epochs: int, dataloader: DataLoader, sampler: Sampler) -> None:
+        """Training looooooop.
 
         Args:
             max_epochs (int): Total epochs
             dataloader (DataLoader): Training dataloader
+            sampler (Sampler): Datasampler
         """
         for epoch in range(self.__elapsed_epochs, max_epochs):
-            dataloader.sampler.set_epoch(epoch)
+            sampler.set_epoch(epoch)
             epoch_loss = self.__train_step(dataloader)
 
             if self.__global_rank == 0:
                 print(f"Training loss: {epoch_loss}", flush=True)
                 self.__tensorboard.add_scalar("Train Loss", epoch_loss, epoch)
-                # TODO: Perform sampling of 10 images for evaluation purpose
+                self.__tensorboard.flush()
+                # TODO: Perform generation of 10 images for evaluation purpose
                 if (epoch % self.__save_every == 0) or (epoch == max_epochs - 1):
                     self.__save_checkpoint(epoch)
 

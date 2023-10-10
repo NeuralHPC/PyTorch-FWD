@@ -1,3 +1,5 @@
+"""Generate images for following specified models."""
+
 import torch
 import os
 import sys
@@ -19,7 +21,7 @@ model_id = {
 }
 
 
-class Trainer:
+class Sampler:
     def __init__(
         self, model, global_seed, scheduler, img_size, batch_size, sample_path
     ):
@@ -82,10 +84,10 @@ def main(scheduler_nm: str, dataset: str, input_shape: int):
         print(f"Running {total_batches} number of batches for sampling", flush=True)
         print(f"Saving the sampled images at {sample_path}", flush=True)
 
-    trainer = Trainer(
+    sampler = Sampler(
         model, 0, scheduler, model.config.sample_size, batch_size, sample_path
     )
-    trainer.sample(total_batches)
+    sampler.sample(total_batches)
     destroy_process_group()
 
 

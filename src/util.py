@@ -48,62 +48,65 @@ def _parse_args():
         "--time-steps", type=int, default=40, help="steps per diffusion"
     )
     parser.add_argument(
+        "--save-every",
+        type=int,
+        default=50,
+        help="Save the model for every specified epochs"
+    )
+    parser.add_argument(
+        "--print-every",
+        type=int,
+        default=100,
+        help="Print every specified step"
+    )
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        default=None,
+        help="Saved model path in case of resuming the training"
+    )
+    parser.add_argument(
         "--gpus",
         type=int,
         default=-1,
         help="set gpu no by hand. Use all if -1 (default).",
     )
+    parser.add_argument(
+        "--allow-tf32",
+        help="Use tensorflot32 operations.",
+        action="store_false"
+    )
+    parser.add_argument(
+        "--loss-type",
+        default="MSE",
+        choices=["MSE", "PACKET", "MIXED"],
+        help="Choice of loss function"
+    )
     parser.add_argument("--logdir", type=str, default="./log", help="logdir name.")
+    parser.add_argument(
+        "--clip-grad-norm",
+        type=float,
+        default=0.0,
+        help="Gradient clipping value."
+    )
     parser.add_argument(
         "--distribute", help="TODO: Use for multinode training.", action="store_true"
     )
     parser.add_argument("--data-dir", required=True, help="Base dataset path")
     parser.add_argument("--resize", type=int, default=64, help="Resize the input image")
-    parser.add_argument(
-        "--channel-mult",
-        type=str,
-        default="1,2,2,4",
-        help="Channel multiplier for the UNet",
-    )
-    parser.add_argument(
-        "--num-res-blocks",
-        type=int,
-        default=2,
-        help="Number of residual blocks for the model",
-    )
-    parser.add_argument(
-        "--conditional", action="store_false", help="Add the class condition to model"
-    )
-    parser.add_argument(
-        "--attn-heads", type=int, default=4, help="Number of attention heads"
-    )
-    parser.add_argument(
-        "--attn-heads-upsample",
-        type=int,
-        default=-1,
-        help="Number of attention heads during upsample",
-    )
-    parser.add_argument(
-        "--attn-resolution",
-        type=str,
-        default="16,8",
-        help="Resolutions at which attention should be applied",
-    )
-    parser.add_argument(
-        "--base-channels",
-        type=int,
-        default=128,
-        help="Base channels for the UNet to start with",
-    )
+    
     parser.add_argument(
         "--wavelet-loss",
         help="Use wavelets fix high frequency artifacts.",
         action="store_true",
     )
     parser.add_argument(
-        "--dataset", type=str, default="CelebAHQ", help="Select the dataset to diffuse"
+        "--dataset",
+        type=str,
+        default="CIFAR10",
+        choices=["CIFAR10", "CELEBA64", "CELEBAHQ64", "CELEBAHQ128"],
+        help="Select the dataset to diffuse"
     )
-    parser.add_argument("--dropout", type=float, default=0.0, help="Dropout rate")
     return parser.parse_args()
 
 

@@ -7,8 +7,6 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets, io, transforms
 from torch.utils.data.distributed import DistributedSampler
 
-from .sample import sample_noise, linear_noise_scheduler
-
 
 class CelebAHQDataset(Dataset):
     """CelebAHQ dataset."""
@@ -89,7 +87,7 @@ def get_dataloaders(
         Tuple[DataLoader, DataLoader]: A tuple containing train and validation dataloaders/datasets
     """
     train_set, val_set = None, None
-    if dataset_name.lower() == "mnist":
+    if "mnist" in dataset_name.lower():
         train_set = datasets.MNIST(
             "../mnist_data",
             download=True,
@@ -110,7 +108,7 @@ def get_dataloaders(
                 ]
             ),
         )
-    elif dataset_name.lower() == "celebahq":
+    elif "celebahq" in dataset_name.lower():
         train_set = CelebAHQDataset(
             data_path,
             transform=transforms.Compose(
@@ -127,7 +125,7 @@ def get_dataloaders(
                 ]
             ),
         )
-    elif dataset_name.lower() == "cifar10":
+    elif "cifar10" in dataset_name.lower():
         # TODO: Get these normalize values from the config file later
         normalize = transforms.Normalize(
             mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761]
@@ -147,7 +145,7 @@ def get_dataloaders(
             train=False,
             transform=transforms.Compose([transforms.ToTensor()]),
         )
-    elif dataset_name.lower() == "celeba":
+    elif "celeba" in dataset_name.lower():
         raise NotImplementedError
 
     if only_datasets:
@@ -161,10 +159,10 @@ def get_dataloaders(
 
 
 
-def get_distributed_dataloader(dataset, world_size, rank, global_seed, batch_size, num_workers):
+def get_distributed_dataloader(dataset, world_size, global_seed, batch_size, num_workers):
     sampler = DistributedSampler(
         dataset, num_replicas=world_size,
-        rank=rank, shuffle=True, seed=global_seed
+        shuffle=True, seed=global_seed
     )
     return DataLoader(
         dataset, batch_size=batch_size//world_size,
