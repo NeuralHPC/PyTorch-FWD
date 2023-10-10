@@ -90,7 +90,7 @@ def _parse_args():
         help="Gradient clipping value."
     )
     parser.add_argument(
-        "--distribute", help="TODO: Use for multinode training.", action="store_true"
+        "--distribute", help="Use for multinode training.", action="store_true"
     )
     parser.add_argument("--data-dir", required=True, help="Base dataset path")
     parser.add_argument("--resize", type=int, default=64, help="Resize the input image")
@@ -123,7 +123,18 @@ def _sampler_args():
         "--diff-steps", type=int, default=40, help="Number of diffusion steps"
     )
     parser.add_argument(
-        "--gif", action="store_true", help="Store diffusion process as a GIF"
+        "--batch-size",
+        type=int,
+        default=50,
+        help="input batch size for testing (default: 50)",
+    )
+    parser.add_argument(
+        "--distribute", help="Use for multinode training.", action="store_true"
+    )
+    parser.add_argument(
+        "--allow-tf32",
+        help="Use tensorflot32 operations.",
+        action="store_false"
     )
     parser.add_argument(
         "--gpus",
@@ -132,8 +143,9 @@ def _sampler_args():
         help="set gpu no by hand. Use all if -1 (default).",
     )
     parser.add_argument(
-        "--use-DDIM",
-        action="store_true",
+        "--sampler",
+        default="DDPM",
+        choices=["DDPM", "DDIM"],
         help="Use DDIM Sampling else DDPM is used by default",
     )
     return parser.parse_args()
