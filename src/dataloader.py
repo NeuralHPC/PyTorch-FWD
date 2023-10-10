@@ -171,13 +171,3 @@ def get_distributed_dataloader(dataset, world_size, rank, global_seed, batch_siz
         shuffle=True, sampler=sampler,
         num_workers=num_workers, pin_memory=True, drop_last=True
     ), sampler
-
-
-def load_input(input_imgs: torch.Tensor, time_steps: int):
-    current_steps = torch.randint(high=time_steps, size=[input_imgs.shape[0]])
-    alphas_t = torch.tensor(
-        [linear_noise_scheduler(time, time_steps)[0] for time in current_steps]
-    ).reshape(len(current_steps), 1)
-    batch_map = torch.vmap(sample_noise, randomness="different")
-    x, y = batch_map(input_imgs, alphas_t)
-    return x, y, current_steps
