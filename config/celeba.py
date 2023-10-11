@@ -2,8 +2,8 @@
 
 from typing import Dict, Any
 
-celeba_path: str = '<path_to_celeba_dataset>'
-celebahq_path: str = '<path_to_celebahq_dataset>'
+celeba_path: str = None
+celebahq_path: str = None
 
 
 
