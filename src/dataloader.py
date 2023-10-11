@@ -4,8 +4,8 @@ from typing import Dict, Tuple
 
 import torch
 from torch.utils.data import DataLoader, Dataset
-from torchvision import datasets, io, transforms
 from torch.utils.data.distributed import DistributedSampler
+from torchvision import datasets, io, transforms
 
 
 class CelebAHQDataset(Dataset):
@@ -73,15 +73,19 @@ class CelabADataset(Dataset):
 
 
 def get_dataloaders(
-    dataset_name: str, batch_size: int, val_size: int, data_path: str = None, only_datasets: bool = True
+    dataset_name: str,
+    batch_size: int,
+    val_size: int,
+    data_path: str = None,
+    only_datasets: bool = True,
 ) -> Tuple[DataLoader, DataLoader]:
     """Get the dataloaders based on the dataset.
 
     Args:
         dataset_name (str): Name of the dataset
         batch_size (int): Batch size
-        data_path (str, optional): Path to dataset. Defaults to None.
-        only_datasets (bool, optional): Return only datasets. Defaults to True.
+        data_path (str): Path to dataset. Defaults to None.
+        only_datasets (bool): Return only datasets. Defaults to True.
 
     Returns:
         Tuple[DataLoader, DataLoader]: A tuple containing train and validation dataloaders/datasets
@@ -158,14 +162,37 @@ def get_dataloaders(
     return trainloader, valloader
 
 
+def get_distributed_dataloader(
+    dataset: Dataset,
+    world_size: int,
+    global_seed: int,
+    batch_size: int,
+    num_workers: int,
+) -> Tuple[DataLoader, torch.utils.data.Sampler]:
+    """Return the distributed dataloader.
 
-def get_distributed_dataloader(dataset, world_size, global_seed, batch_size, num_workers):
+    Args:
+        dataset (Dataset): Dataset object
+        world_size (int): Total number of available GPUs
+        global_seed (int): Overall seed
+        batch_size (int): Batch size
+        num_workers (int): Total number of workers in each node
+
+    Returns:
+        Tuple[DataLoader, torch.utils.data.Sampler]: Tuple containing dataloader and datasampler
+    """
     sampler = DistributedSampler(
-        dataset, num_replicas=world_size,
-        shuffle=True, seed=global_seed
+        dataset, num_replicas=world_size, shuffle=True, seed=global_seed
     )
-    return DataLoader(
-        dataset, batch_size=batch_size//world_size,
-        shuffle=False, sampler=sampler,
-        num_workers=num_workers, pin_memory=True, drop_last=True
-    ), sampler
+    return (
+        DataLoader(
+            dataset,
+            batch_size=batch_size // world_size,
+            shuffle=False,
+            sampler=sampler,
+            num_workers=num_workers,
+            pin_memory=True,
+            drop_last=True,
+        ),
+        sampler,
+    )

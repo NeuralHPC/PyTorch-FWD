@@ -1,11 +1,11 @@
 from itertools import product
 from typing import Tuple
 
-import torch
+import numpy as np
 import ptwt
 import pywt
+import torch
 import torch.nn.functional as F
-import numpy as np
 
 
 def get_freq_order(level: int):

@@ -39,37 +39,29 @@ def _parse_args():
         "--save-every",
         type=int,
         default=50,
-        help="Save the model for every specified epochs"
+        help="Save the model for every specified epochs",
     )
     parser.add_argument(
-        "--print-every",
-        type=int,
-        default=100,
-        help="Print every specified step"
+        "--print-every", type=int, default=100, help="Print every specified step"
     )
     parser.add_argument(
         "--model-path",
         type=str,
         default=None,
-        help="Saved model path in case of resuming the training"
+        help="Saved model path in case of resuming the training",
     )
     parser.add_argument(
-        "--allow-tf32",
-        help="Use tensorflot32 operations.",
-        action="store_true"
+        "--allow-tf32", help="Use tensorflot32 operations.", action="store_true"
     )
     parser.add_argument(
         "--loss-type",
         default="MSE",
         choices=["MSE", "PACKET", "MIXED"],
-        help="Choice of loss function"
+        help="Choice of loss function",
     )
     parser.add_argument("--logdir", type=str, default="./log", help="logdir name.")
     parser.add_argument(
-        "--clip-grad-norm",
-        type=float,
-        default=0.0,
-        help="Gradient clipping value."
+        "--clip-grad-norm", type=float, default=0.0, help="Gradient clipping value."
     )
     parser.add_argument(
         "--distribute", help="Use for multinode training.", action="store_true"
@@ -79,7 +71,7 @@ def _parse_args():
         type=str,
         default="CIFAR10",
         choices=["CIFAR10", "CELEBA64", "CELEBAHQ64", "CELEBAHQ128"],
-        help="Select the dataset to diffuse"
+        help="Select the dataset to diffuse",
     )
     return parser.parse_args()
 
@@ -101,12 +93,10 @@ def _sampler_args():
         type=str,
         default="CIFAR10",
         choices=["CIFAR10", "CELEBA64", "CELEBAHQ64", "CELEBAHQ128"],
-        help="Select the dataset to diffuse"
+        help="Select the dataset to diffuse",
     )
     parser.add_argument(
-        "--allow-tf32",
-        help="Use tensorflot32 operations.",
-        action="store_true"
+        "--allow-tf32", help="Use tensorflot32 operations.", action="store_true"
     )
     parser.add_argument(
         "--batch-size",
@@ -127,10 +117,10 @@ def _sampler_args():
 
 
 def write_movie(
-        images: List[np.ndarray],
-        name: Optional[str] = "diff_movie",
-        xlim: Optional[int] = 3,
-        ylim: Optional[int] = 3,
+    images: List[np.ndarray],
+    name: Optional[str] = "diff_movie",
+    xlim: Optional[int] = 3,
+    ylim: Optional[int] = 3,
 ):
     """Write the optimization steps into a mp4-movie file.
 
@@ -166,6 +156,7 @@ def write_movie(
         for img in images:
             l.set_data(img / np.max(np.abs(img)))
             writer.grab_frame()
+
 
 # def _save_model(
 #     checkpoint_dir: str,

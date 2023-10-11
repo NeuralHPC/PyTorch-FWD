@@ -14,7 +14,7 @@ def format(session):
 
 @nox.session(name="lint")
 def lint(session):
-    """Check code conventions"""
+    """Check code conventions."""
     session.install("flake8==4.0.1")
     session.install(
         "flake8-black",

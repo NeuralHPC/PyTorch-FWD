@@ -15,14 +15,15 @@ from src.util import _get_global_rank, _get_local_rank
 
 
 class Trainer:
-    def __init__(self,
-                 model: nn.Module,
-                 args: argparse.Namespace,
-                 optimizer: optim.Optimizer,
-                 loss_fn: nn.Module,
-                 writer: Union[SummaryWriter, None],
-                 save_path: str,
-                 ) -> None:
+    def __init__(
+        self,
+        model: nn.Module,
+        args: argparse.Namespace,
+        optimizer: optim.Optimizer,
+        loss_fn: nn.Module,
+        writer: Union[SummaryWriter, None],
+        save_path: str,
+    ) -> None:
         """DDP Train class.
 
         Args:
@@ -45,7 +46,9 @@ class Trainer:
             if os.path.exists(args.model_path):
                 if self.__global_rank == 0:
                     self.__load_checkpoint(args.model_path)
-        self.model = DDP(self.model, device_ids=[self.__local_rank], find_unused_parameters=True)
+        self.model = DDP(
+            self.model, device_ids=[self.__local_rank], find_unused_parameters=True
+        )
 
         # Initialize training variables
         self.__optimizer = optimizer
@@ -67,7 +70,9 @@ class Trainer:
         checkpoint = torch.load(path)
         self.model.load_state_dict(checkpoint["model_state"])
         self.__elapsed_epochs = checkpoint["elapsed_epochs"] + 1
-        print(f"[GPU{self.__global_rank}] Resuming training from epoch: {self.__elapsed_epochs}")
+        print(
+            f"[GPU{self.__global_rank}] Resuming training from epoch: {self.__elapsed_epochs}"
+        )
 
     def __save_checkpoint(self, epoch: int) -> None:
         """Save checkpoint.
@@ -78,7 +83,7 @@ class Trainer:
         checkpoint = {}
         checkpoint["model_state"] = self.model.module.state_dict()
         checkpoint["elapsed_epochs"] = epoch
-        file_path = os.path.join(self.__save_path, f'model_ckpt_epoch_{epoch}.pt')
+        file_path = os.path.join(self.__save_path, f"model_ckpt_epoch_{epoch}.pt")
         torch.save(checkpoint, file_path)
         print(f"===> Checkpoint saved at epoch {epoch} to {file_path}")
 
@@ -99,7 +104,9 @@ class Trainer:
             # Preprocess and load input to corresponding device.
             x, y, current_steps = self.__preprocess_input(input)
             x, y = x.to(self.__local_rank), y.to(self.__local_rank)
-            class_label, current_steps = class_label.to(self.__local_rank), current_steps.to(self.__local_rank)
+            class_label, current_steps = class_label.to(
+                self.__local_rank
+            ), current_steps.to(self.__local_rank)
 
             # Forward pass and loss calculation
             self.__optimizer.zero_grad()
@@ -109,12 +116,14 @@ class Trainer:
             # Backward pass
             loss_val.backward()
             if self.__clip_grad_norm > 0:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.__clip_grad_norm)
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.__clip_grad_norm
+                )
             self.__optimizer.step()
             per_step_loss += loss_val.item()
             total_steps += 1
             if total_steps % self.__print_every == 0 and self.__global_rank == 0:
-                print(f'Step: {total_steps}, Loss: {per_step_loss / total_steps}')
+                print(f"Step: {total_steps}, Loss: {per_step_loss / total_steps}")
         avg_loss = per_step_loss / total_steps
         return avg_loss
 
@@ -150,7 +159,9 @@ class Trainer:
         Returns:
             Tuple[torch.Tensor]: Tuple containing noised input, noise and step values.
         """
-        current_steps = torch.randint(high=self.__time_steps, size=[input_imgs.shape[0]])
+        current_steps = torch.randint(
+            high=self.__time_steps, size=[input_imgs.shape[0]]
+        )
         alphas_t = torch.tensor(
             [
                 linear_noise_scheduler(time, self.__time_steps)[0]

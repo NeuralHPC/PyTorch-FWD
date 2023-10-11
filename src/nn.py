@@ -172,7 +172,7 @@ class CheckpointFunction(torch.autograd.Function):
 
 
 def get_loss_fn(loss_type: str):
-    if loss_type.lower() == 'mse':
+    if loss_type.lower() == "mse":
         return nn.MSELoss()
     else:
         return NotImplementedError
