@@ -5,33 +5,24 @@ Diffusion on CelebA dataset.
 Along with the requirements.txt please install jax corresponding to local cuda version.
 
 # Dataset:
-Steps:
-1. Download the CelebA-HQ dataset (e.g., from here: https://github.com/suvojit-0x55aa/celebA-HQ-dataset-download)
-2. Please provide paths the extracted dataset path to data-dir argument
+$\bullet$ Download the CelebA-HQ dataset (e.g., from here: https://github.com/suvojit-0x55aa/celebA-HQ-dataset-download)
+## Important:
+For CIFAR10 the dataset is automatically downloaded by torchvision.
+In case of Celeba and CelebaHQ, please fill the corresponding datapaths in `config/celeba.py`.
 
-# Training and sampling
 
-To run Diffusion on MNIST
+# Training and sampling (Uninode):
+To train diffusion model on uninode
 ```
-PYTHONPATH=. python scripts/train_diffuse_mnist.py --batch-size 100 --seed 42 --epochs 400 --data-dir <path to data>
+PYTHONPATH=. torchrun --standalone --nproc_per_node=<num_gpus> scripts/train.py --batch-size <bs> --epochs <n_epochs> --time-steps 1000 --dataset=<dataset_name>
 ```
-Diffusion on CelebAHQ
+For sampling on uninode
 ```
-PYTHONPATH=. python scripts/train_diffuse_celebA.py --batch-size 10 --seed 42 --epochs 200 --data-dir <path to data>
+PYTHONPATH=. torchrun --standalone --nproc_per_node=<num_gpus> scripts/sample.py --ckpt-path <checkpoint directory> --input-shape <input_img_height> --dataset=<dataset_name> --sampler="DDPM" --batch-size <bs> --diff-steps=1000
 ```
-Add `--dataset='celeba'` to run on CelebA, by default it uses CelebAHQ dataset.
+The supported dataset options are "CIFAR10", "CELEBA64", "CELEBAHQ64", "CELEBAHQ128" and supported sampler options are "DDPM", "DDIM".
 
-Sampling on CelebAHQ
-```
-PYTHONPATH=. python scripts/sample_diffuse_celebA.py --ckpt-path <checkpoint_path> --input-shape <64>
-```
-for input_shape argument please provide either height or width of the image. Currently only supports square images.<br>
-if no seed was given, a random seed is selected. To provide seed use ```--args.seed <seed>```.<br>
-Add ```--gif``` to the above command for visualizing the diffusion steps of one random label.
-This script saves the mean and variance of InceptionV3 activations for the sampled images.
 
-# Hyperparameters
-Hyperparameters can be found in [here](hyperparams.md).
 
 # FID
 Computing the FID
