@@ -27,18 +27,6 @@ def _parse_args():
         help="input batch size for testing (default: 50)",
     )
     parser.add_argument(
-        "--max-workers",
-        type=int,
-        default=16,
-        help="the number of data loading workers.",
-    )
-    parser.add_argument(
-        "--learning-rate",
-        type=float,
-        default=1e-4,
-        help="learning rate for optimizer (default: 1e-4)",
-    )
-    parser.add_argument(
         "--epochs", type=int, default=51, help="number of epochs (default: 21)"
     )
     parser.add_argument(
@@ -66,15 +54,9 @@ def _parse_args():
         help="Saved model path in case of resuming the training"
     )
     parser.add_argument(
-        "--gpus",
-        type=int,
-        default=-1,
-        help="set gpu no by hand. Use all if -1 (default).",
-    )
-    parser.add_argument(
         "--allow-tf32",
         help="Use tensorflot32 operations.",
-        action="store_false"
+        action="store_true"
     )
     parser.add_argument(
         "--loss-type",
@@ -91,14 +73,6 @@ def _parse_args():
     )
     parser.add_argument(
         "--distribute", help="Use for multinode training.", action="store_true"
-    )
-    parser.add_argument("--data-dir", required=True, help="Base dataset path")
-    parser.add_argument("--resize", type=int, default=64, help="Resize the input image")
-
-    parser.add_argument(
-        "--wavelet-loss",
-        help="Use wavelets fix high frequency artifacts.",
-        action="store_true",
     )
     parser.add_argument(
         "--dataset",
@@ -132,7 +106,7 @@ def _sampler_args():
     parser.add_argument(
         "--allow-tf32",
         help="Use tensorflot32 operations.",
-        action="store_false"
+        action="store_true"
     )
     parser.add_argument(
         "--batch-size",
@@ -142,17 +116,6 @@ def _sampler_args():
     )
     parser.add_argument(
         "--distribute", help="Use for multinode training.", action="store_true"
-    )
-    parser.add_argument(
-        "--allow-tf32",
-        help="Use tensorflot32 operations.",
-        action="store_false"
-    )
-    parser.add_argument(
-        "--gpus",
-        type=int,
-        default=-1,
-        help="set gpu no by hand. Use all if -1 (default).",
     )
     parser.add_argument(
         "--sampler",

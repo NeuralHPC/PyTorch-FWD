@@ -166,6 +166,6 @@ def get_distributed_dataloader(dataset, world_size, global_seed, batch_size, num
     )
     return DataLoader(
         dataset, batch_size=batch_size//world_size,
-        shuffle=True, sampler=sampler,
+        shuffle=False, sampler=sampler,
         num_workers=num_workers, pin_memory=True, drop_last=True
     ), sampler

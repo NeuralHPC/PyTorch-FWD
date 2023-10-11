@@ -41,10 +41,11 @@ class Trainer:
 
         # Initialize the model.
         self.model = model.to(self.__local_rank)
-        if os.path.exists(args.model_path) or args.model_path is not None:
-            if self.__global_rank == 0:
-                self.__load_checkpoint(args.model_path)
-        self.model = DDP(self.model, device_ids=[self.__local_rank])
+        if args.model_path is not None:
+            if os.path.exists(args.model_path):
+                if self.__global_rank == 0:
+                    self.__load_checkpoint(args.model_path)
+        self.model = DDP(self.model, device_ids=[self.__local_rank], find_unused_parameters=True)
 
         # Initialize training variables
         self.__optimizer = optimizer
@@ -75,7 +76,7 @@ class Trainer:
             epoch (int): Current epoch
         """
         checkpoint = {}
-        checkpoint["model_state"] = self.model.moduel.state_dict()
+        checkpoint["model_state"] = self.model.module.state_dict()
         checkpoint["elapsed_epochs"] = epoch
         file_path = os.path.join(self.__save_path, f'model_ckpt_epoch_{epoch}.pt')
         torch.save(checkpoint, file_path)
@@ -93,6 +94,7 @@ class Trainer:
         self.model.train()
         per_step_loss = 0.0
         total_steps = 0
+        self.model.train()
         for input, class_label in dataloader:
             # Preprocess and load input to corresponding device.
             x, y, current_steps = self.__preprocess_input(input)
@@ -107,12 +109,12 @@ class Trainer:
             # Backward pass
             loss_val.backward()
             if self.__clip_grad_norm > 0:
-                torch.nn.utils.clip_grad_norm(self.model.parameters(), self.__clip_grad_norm)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.__clip_grad_norm)
             self.__optimizer.step()
             per_step_loss += loss_val.item()
             total_steps += 1
-            if total_steps % self.__print_every == 0:
-                print(f'Step loss: {per_step_loss / total_steps}')
+            if total_steps % self.__print_every == 0 and self.__global_rank == 0:
+                print(f'Step: {total_steps}, Loss: {per_step_loss / total_steps}')
         avg_loss = per_step_loss / total_steps
         return avg_loss
 
@@ -125,6 +127,9 @@ class Trainer:
             sampler (Sampler): Datasampler
         """
         for epoch in range(self.__elapsed_epochs, max_epochs):
+            if self.__global_rank == 0:
+                print(f"Epoch: {epoch}, total_batches: {len(dataloader)}")
+
             sampler.set_epoch(epoch)
             epoch_loss = self.__train_step(dataloader)
 

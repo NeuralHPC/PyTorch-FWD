@@ -102,8 +102,9 @@ def main():
     writer = None
     save_path = None
     if global_rank == 0:
-        writer_name = f"_dataset_{args.dataset}_loss_{args.loss_type}_on_{datetime.datetime.now()}"
-        save_path = f'./{args.dataset}_{args.loss_type}_{datetime.datetime.now()}/'
+        dt_now = str(datetime.datetime.now()).replace(" ", "_").replace(":", "-").replace(".", "-")
+        writer_name = f"_dataset_{args.dataset}_loss_{args.loss_type}_on_{dt_now}"
+        save_path = f'./logs/{args.dataset}_{args.loss_type}_{dt_now}/'
         if args.model_path is not None:
             save_path = "/".join(args.model_path.split('/')[:-1])
         writer = SummaryWriter(log_dir=save_path, comment=writer_name)

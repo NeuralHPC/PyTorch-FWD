@@ -1,4 +1,5 @@
 """Sample based on the dataset."""
+import os
 
 import torch
 import torch.distributed as dist
@@ -35,6 +36,7 @@ def main():
         num_workers=config.dataset_config["num_workers"]
     )
     save_path = f"./sample_imgs_{args.dataset}_{args.sampler}/"
+    os.makedirs(save_path, exist_ok=True)
 
     sampler = Sampler(
         model=model,
