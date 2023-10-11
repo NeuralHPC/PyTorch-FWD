@@ -1,4 +1,5 @@
 import datetime
+import os
 from typing import Dict, Any
 
 import torch
@@ -75,6 +76,11 @@ def main():
     local_rank = _get_local_rank()
     global_rank = _get_global_rank() if args.distribute else local_rank
     model = instantiate_model(config.model_config)
+
+    if config.data_dir is None:
+        raise ValueError('Datapath is None, please set the datapath in corresponding config file.')
+    if not os.path.exists(config.data_dir):
+        raise ValueError('Data directory doesnot exist, please provide proper path in corresponding config file.')
 
     # Dataloading
     train_set, val_set = get_dataloaders(

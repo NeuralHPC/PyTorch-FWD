@@ -21,6 +21,11 @@ def main():
     torch.manual_seed(args.seed)
     model = instantiate_model(config.model_config)
 
+    if config.data_dir is None:
+        raise ValueError('Datapath is None, please set the datapath in corresponding config file.')
+    if not os.path.exists(config.data_dir):
+        raise ValueError('Data directory doesnot exist, please provide proper path in corresponding config file.')
+
     data_set, _ = get_dataloaders(
         dataset_name=args.dataset,
         batch_size=args.batch_size,
