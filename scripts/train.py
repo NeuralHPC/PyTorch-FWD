@@ -1,15 +1,17 @@
-from config import celeba, cifar10
-from typing import Tuple, Union, Dict, Any
-import torch
 import datetime
-import torch.nn as nn
+from typing import Dict, Any
+
+import torch
 import torch.distributed as dist
+import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
-from src.util import _parse_args, _get_global_rank, _get_local_rank
-from src.improved_UNet import Improv_UNet
-from src.trainer import Trainer
-from src.nn import get_loss_fn
+
+from config import celeba, cifar10
 from src.dataloader import get_dataloaders, get_distributed_dataloader
+from src.improved_UNet import Improv_UNet
+from src.nn import get_loss_fn
+from src.trainer import Trainer
+from src.util import _parse_args, _get_global_rank, _get_local_rank
 
 
 def load_config(dataset_name: str) -> Any:
@@ -38,8 +40,8 @@ def instantiate_model(model_config: Dict[str, Any]) -> nn.Module:
     """
     attn_res = []
     for value in model_config["attn_res"]:
-        attn_res.append(model_config["input_size"]//int(value))
-    
+        attn_res.append(model_config["input_size"] // int(value))
+
     model = Improv_UNet(
         in_channels=model_config["in_c"],
         model_channels=model_config["model_c"],
@@ -65,7 +67,7 @@ def main():
               (Note: This improves training on Ampere GPU devices but affects accuracy a little.)")
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
-    
+
     # Initialize the models
     dist.init_process_group(backend='nccl')
     torch.manual_seed(args.seed)
@@ -79,7 +81,7 @@ def main():
         dataset_name=args.dataset,
         batch_size=args.batch_size,
         val_size=20,
-        data_path=config.data_path,
+        data_path=config.data_dir,
         only_datasets=True
     )
     train_loader, train_sampler = get_distributed_dataloader(dataset=train_set,
@@ -122,7 +124,7 @@ def main():
     )
     if global_rank == 0:
         writer.close()
-    
+
     dist.destroy_process_group()
 
 

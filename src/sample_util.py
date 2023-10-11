@@ -1,6 +1,4 @@
-import random
-from functools import partial
-from typing import List, Tuple, Union
+from typing import List, Tuple
 
 import torch
 import torch.nn as nn
@@ -8,7 +6,7 @@ import torch.nn as nn
 
 @torch.jit.script
 def linear_noise_scheduler(
-    current_time_step: int, max_steps: int
+        current_time_step: int, max_steps: int
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Sample linear noise scheduler.
 
@@ -30,8 +28,8 @@ def linear_noise_scheduler(
 
 
 def sample_noise(
-    img: torch.Tensor,
-    alpha_t: float,
+        img: torch.Tensor,
+        alpha_t: float,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Diffusion forward step.
 
@@ -43,7 +41,7 @@ def sample_noise(
         Tuple[torch.Tensor, torch.Tensor]: Tuple containing the noised image and noise
     """
     noise = torch.randn_like(img)
-    a = (alpha_t**0.5) * img
+    a = (alpha_t ** 0.5) * img
     b = ((1 - alpha_t) ** 0.5) * noise
     x = a + b
     return x, noise
@@ -98,19 +96,19 @@ def sample_noise(
 
 
 def sample_DDPM(
-    class_labels: torch.Tensor,
-    model: nn.Module,
-    max_steps: int,
-    input_: List[int],
-    device: torch.device,
+        class_labels: torch.Tensor,
+        model: nn.Module,
+        max_steps: int,
+        input_shape: List[int],
+        device: torch.device,
 ) -> torch.Tensor:
     """DDPM Sampling from https://arxiv.org/pdf/2006.11239.pdf.
 
     Args:
         class_labels (torch.Tensor): Labels for class conditioning
         model (nn.Module): Model instance
-        max_steps (int): MAximum steps
-        input_ (List[int]): Input images shape
+        max_steps (int): Maximum steps
+        input_shape (List[int]): Input images shape
         device (torch.device): torch device to use
 
     Returns:
@@ -118,31 +116,30 @@ def sample_DDPM(
     """
     # device = torch.device('cpu')
     model = model.to(device)
-    x_t = torch.randn_like(input_, device=device)
+    x_t = torch.randn(input_shape, device=device)
     x_t_1 = x_t
     class_labels = class_labels.to(device)
-    from tqdm.auto import tqdm
 
-    for time in tqdm(reversed(range(max_steps)), total=max_steps):
+    for time in reversed(range(max_steps)):
         alpha_t, alpha, _ = linear_noise_scheduler(time, max_steps)
         z = torch.randn_like(x_t_1, device=device)
         time = torch.unsqueeze(torch.tensor(time, device=device), dim=-1)
         denoise = model(x_t_1, time, class_labels)
         x_mean = (x_t_1 - (denoise * ((1 - alpha) / ((1 - alpha_t) ** 0.5)))) / (
-            alpha**0.5
+                alpha ** 0.5
         )
         x_t_1 = x_mean + ((1 - alpha) ** 0.5) * z
     return x_t_1
 
 
 def sample_DDIM(
-    class_labels: torch.Tensor,
-    model: nn.Module,
-    max_steps: int,
-    input_shape: List[int],
-    device: torch.device,
-    eta: float = 0.0,
-    tau_steps: int = 1,
+        class_labels: torch.Tensor,
+        model: nn.Module,
+        max_steps: int,
+        input_shape: List[int],
+        device: torch.device,
+        eta: float = 0.0,
+        tau_steps: int = 1,
 ) -> torch.Tensor:
     """DDIM Sampling from https://arxiv.org/pdf/2010.02502.pdf.
 
@@ -159,20 +156,19 @@ def sample_DDIM(
         torch.Tensor: Sampled image
     """
     model = model.to(device)
-    x_t = torch.rand_like(input_shape, device=device)
+    x_t = torch.rand(input_shape, device=device)
     x_t_1 = x_t
     class_labels = class_labels.to(device)
-    from tqdm.auto import tqdm
 
-    for time in tqdm(reversed(range(max_steps))):
+    for time in reversed(range(max_steps)):
         alpha_t, _, _ = linear_noise_scheduler(time, max_steps)
         alpha_t_1 = 1.0
         if time != 0:
-            alpha_t_1, _, _ = linear_noise_scheduler(time-1, max_steps)
+            alpha_t_1, _, _ = linear_noise_scheduler(time - 1, max_steps)
 
         sigma_t = eta * (
-            (torch.sqrt((1- alpha_t_1)/(1 - alpha_t)))
-            * (torch.sqrt((1-alpha_t)/alpha_t_1))
+                (torch.sqrt((1 - alpha_t_1) / (1 - alpha_t)))
+                * (torch.sqrt((1 - alpha_t) / alpha_t_1))
         )
 
         z = torch.rand_like(x_t_1, device=device)
@@ -180,12 +176,11 @@ def sample_DDIM(
         denoise = model(x_t_1, time, class_labels)
         # First term
         pred_x_0 = torch.sqrt(alpha_t_1 / alpha_t) * (
-            x_t_1 - (torch.sqrt(1 - alpha_t)) * denoise
+                x_t_1 - (torch.sqrt(1 - alpha_t)) * denoise
         )
         # Second term
-        point_x_t = torch.sqrt(1 - alpha_t_1 - (sigma_t**2)) * denoise
+        point_x_t = torch.sqrt(1 - alpha_t_1 - (sigma_t ** 2)) * denoise
         # Final term
-        x_mean = pred_x_0 + point_x_t 
+        x_mean = pred_x_0 + point_x_t
         x_t_1 = x_mean + sigma_t * z
     return x_t_1
-

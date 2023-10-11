@@ -1,9 +1,11 @@
-import torch
 import os
-from src.sample import sample_DDPM
-from src.improved_UNet import Improv_UNet
-from src.dataloader import get_dataloaders
+
+import torch
+
 from config.cifar10 import dataset
+from src.dataloader import get_dataloaders
+from src.improved_UNet import Improv_UNet
+from src.sample_util import sample_DDPM
 
 sample_dir = "./sample_imgs"
 os.makedirs(sample_dir, exist_ok=True)

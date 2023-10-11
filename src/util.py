@@ -94,7 +94,7 @@ def _parse_args():
     )
     parser.add_argument("--data-dir", required=True, help="Base dataset path")
     parser.add_argument("--resize", type=int, default=64, help="Resize the input image")
-    
+
     parser.add_argument(
         "--wavelet-loss",
         help="Use wavelets fix high frequency artifacts.",
@@ -121,6 +121,18 @@ def _sampler_args():
     parser.add_argument("--seed", type=int, default=42, help="Seed value")
     parser.add_argument(
         "--diff-steps", type=int, default=40, help="Number of diffusion steps"
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="CIFAR10",
+        choices=["CIFAR10", "CELEBA64", "CELEBAHQ64", "CELEBAHQ128"],
+        help="Select the dataset to diffuse"
+    )
+    parser.add_argument(
+        "--allow-tf32",
+        help="Use tensorflot32 operations.",
+        action="store_false"
     )
     parser.add_argument(
         "--batch-size",

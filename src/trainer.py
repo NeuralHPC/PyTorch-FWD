@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, Sampler
 from torch.utils.tensorboard import SummaryWriter
 
-from src.sample import linear_noise_scheduler, sample_noise
+from src.sample_util import linear_noise_scheduler, sample_noise
 from src.util import _get_global_rank, _get_local_rank
 
 
@@ -111,7 +111,7 @@ class Trainer:
             self.__optimizer.step()
             per_step_loss += loss_val.item()
             total_steps += 1
-            if total_steps%self.__print_every == 0:
+            if total_steps % self.__print_every == 0:
                 print(f'Step loss: {per_step_loss / total_steps}')
         avg_loss = per_step_loss / total_steps
         return avg_loss
