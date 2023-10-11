@@ -104,7 +104,10 @@ def main():
     # model utils intialization
     loss_fn = get_loss_fn(args.loss_type)
     args.clip_grad_norm = config.optimizer_config["clip_grad_norm"] if args.clip_grad_norm == 0 else args.clip_grad_norm
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.optimizer_config["lr"])
+    if args.lr is None:
+        print("User defined learning rate not available, defaulting to the learning rate in corresponding config file.")
+    learning_rate = args.lr if args.lr is not None and args.lr != learning_rate else config.optimizer_config["lr"]
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     writer = None
     save_path = None
     if global_rank == 0:

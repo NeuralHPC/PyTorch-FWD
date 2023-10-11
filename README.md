@@ -22,7 +22,9 @@ PYTHONPATH=. torchrun --standalone --nproc_per_node=<num_gpus> scripts/sample.py
 ```
 The supported dataset options are "CIFAR10", "CELEBA64", "CELEBAHQ64", "CELEBAHQ128" and supported sampler options are "DDPM", "DDIM".
 
-
+# Training and sampling (Multinode):
+To use multinode setup for training and sampling, navigate to `slurmfiles/multinode.sh`
+change the parameters in the torchrun for various datasets and samplers.
 
 # FID
 Computing the FID
