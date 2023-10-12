@@ -24,13 +24,13 @@ def _parse_args():
         "--batch-size",
         type=int,
         default=50,
-        help="input batch size for testing (default: 50)"
+        help="input batch size for testing (default: 50)",
     )
     parser.add_argument(
         "--lr",
         type=float,
         default=None,
-        help="User defined learning rate (default: lr specified in config file)"
+        help="User defined learning rate (default: lr specified in config file)",
     )
     parser.add_argument(
         "--epochs", type=int, default=51, help="number of epochs (default: 21)"

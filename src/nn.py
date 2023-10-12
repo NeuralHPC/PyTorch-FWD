@@ -3,9 +3,13 @@ Various utilities for neural networks as in https://github.com/openai/improved-d
 """
 
 import math
+from functools import partial
+from typing import List
 
 import torch
 import torch.nn as nn
+
+from src.freq_math import forward_wavelet_packet_transform
 
 
 class SiLU(nn.Module):
@@ -174,5 +178,104 @@ class CheckpointFunction(torch.autograd.Function):
 def get_loss_fn(loss_type: str):
     if loss_type.lower() == "mse":
         return nn.MSELoss()
-    else:
-        return NotImplementedError
+    elif loss_type.lower() == "packet":
+        return PacketLoss
+    elif loss_type.lower() == "mixed":
+        return MixedLoss
+
+
+def PacketLoss(
+    output: torch.Tensor,
+    target: torch.Tensor,
+    wavelet: str,
+    level: int,
+    norm_fn: str = None,
+    norm_weights: List[float] = None,
+) -> torch.Tensor:
+    """Computes packet loss with various normalization techniques.
+
+    Args:
+        output (torch.Tensor): Network predictions
+        target (torch.Tensor): Target values
+        wavelet (str): Input wavelet
+        level (int): Level of wavelet decomposition
+        norm_fn (str, optional): norm function to use. Defaults to None.
+        norm_weights (List[float], optional): norm weights to use. Defaults to None.
+
+    Returns:
+        torch.Tensor: packet loss value
+    """
+
+    def weighted_packets(
+        packets: torch.Tensor, norm_weights: List[float]
+    ) -> torch.Tensor:
+        """Weigh the packets based on wavelet norm.
+
+        Args:
+            packets (torch.Tensor): Input packets of shape (bs, packets, c, h, w)
+            norm_weights (List[float]): norm weights to use
+
+        Raises:
+            ValueError: if weights are not provided
+
+        Returns:
+            torch.Tensor: Weighted packets
+        """
+        if norm_weights is None:
+            raise ValueError(
+                "Norm weights must be provided as a list, else use log scale norm."
+            )
+        norm_weights = torch.reshape(torch.Tensor(norm_weights), (1, -1, 1, 1, 1))
+        return norm_weights * packets
+
+    def log_scale_packets(packets: torch.Tensor) -> torch.Tensor:
+        """Normalize packets by log scaling.
+
+        Args:
+            packets (torch.Tensor): Packets of shape (bs, packets, c, h, w)
+
+        Returns:
+            torch.Tensor: log scale normalized packets
+        """
+        return torch.sign(packets) * torch.log(torch.abs(packets) + 1e-8)
+
+    output_packets = forward_wavelet_packet_transform(output, wavelet, level)
+    target_packets = forward_wavelet_packet_transform(target, wavelet, level)
+    if norm_fn is not None:
+        packet_norm = (
+            log_scale_packets
+            if "log" in norm_fn
+            else partial(weighted_packets, norm_weights=norm_weights)
+        )
+        output_packets = packet_norm(output_packets)
+        target_packets = packet_norm(target_packets)
+    packet_mse = torch.mean(0.5 * (output_packets - target_packets) ** 2)
+    return packet_mse
+
+
+def MixedLoss(
+    output: torch.Tensor,
+    target: torch.Tensor,
+    sigma: float,
+    wavelet: str,
+    level: int,
+    norm_fn: str = None,
+    norm_weights: List[float] = None,
+) -> torch.Tensor:
+    """Compute MSE with Packet loss.
+
+    Args:
+        output (torch.Tensor): Network predictions
+        target (torch.Tensor): Target values
+        sigma (float): weighting factor
+        wavelet (str): Wavelet to use for packet loss
+        level (int): Level of decomposition of wavelet tree
+        norm_fn (str, optional): Normalization function for packet loss. Defaults to None.
+        norm_weights (List[float], optional): normalized weights for packet loss. Defaults to None.
+
+    Returns:
+        torch.Tensor: Combination loss of MSE and Packet
+    """
+    mse_loss = nn.functional.mse_loss(output, target)
+    packet_loss = PacketLoss(output, target, wavelet, level, norm_fn, norm_weights)
+    return mse_loss + (sigma * packet_loss)

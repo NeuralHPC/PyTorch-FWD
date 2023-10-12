@@ -1,10 +1,8 @@
-from itertools import product
 
 import scipy
 import torch
 
 from src.freq_math import (
-    get_freq_order,
     generate_frequency_packet_image,
     forward_wavelet_packet_transform,
     inverse_wavelet_packet_transform,
