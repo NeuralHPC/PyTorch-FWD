@@ -1,7 +1,7 @@
 """
 Various utilities for neural networks as in https://github.com/openai/improved-diffusion/blob/main/improved_diffusion/nn.py.
 """
-
+import argparse
 import math
 from functools import partial
 from typing import List
@@ -175,13 +175,26 @@ class CheckpointFunction(torch.autograd.Function):
         return (None, None) + input_grads
 
 
-def get_loss_fn(loss_type: str):
-    if loss_type.lower() == "mse":
+def get_loss_fn(args: argparse.NameSpace, weights=None):
+    if args.loss_type.lower() == "mse":
         return nn.MSELoss()
-    elif loss_type.lower() == "packet":
-        return PacketLoss
-    elif loss_type.lower() == "mixed":
-        return MixedLoss
+    elif args.loss_type.lower() == "packet":
+        return partial(
+            PacketLoss,
+            wavelet=args.wavelet,
+            level=args.max_level,
+            norm_fn=args.packet_norm_type,
+            norm_weights=weights,
+        )
+    elif args.loss_type.lower() == "mixed":
+        return partial(
+            MixedLoss,
+            wavelet=args.wavelet,
+            level=args.max_level,
+            norm_fn=args.packet_norm_type,
+            sigma=args.loss_sigma,
+            norm_weight=weights,
+        )
 
 
 def PacketLoss(

@@ -65,6 +65,26 @@ def _parse_args():
         choices=["MSE", "PACKET", "MIXED"],
         help="Choice of loss function",
     )
+    parser.add_argument(
+        "--packet-norm-type",
+        type=str,
+        default=None,
+        choices=[None, "log", "weighted"],
+        help="Provide packet norm type only when using packet or mixed loss.",
+    )
+    parser.add_argument(
+        "--wavelet",
+        type=str,
+        default="Haar",
+        choices=["Haar", "db2"],
+        help="Type of wavelet for packet loss computation.",
+    )
+    parser.add_argument(
+        "--max-level", type=int, default=3, help="Depth of wavelet decomposition."
+    )
+    parser.add_argument(
+        "--loss-sigma", type=float, default=0.3, help="Weigting factor for mixed loss."
+    )
     parser.add_argument("--logdir", type=str, default="./log", help="logdir name.")
     parser.add_argument(
         "--clip-grad-norm", type=float, default=0.0, help="Gradient clipping value."

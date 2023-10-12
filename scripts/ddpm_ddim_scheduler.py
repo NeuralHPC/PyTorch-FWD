@@ -1,17 +1,17 @@
 """Generate images for following specified models."""
 
-import torch
+import argparse
+import math
 import os
 import sys
-import math
-import argparse
 import time
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
-from tqdm import tqdm
-from diffusers import DDIMScheduler, UNet2DModel, DDPMScheduler
-import numpy as np
 
+import numpy as np
+import torch
+from diffusers import DDIMScheduler, DDPMScheduler, UNet2DModel
+from torch.distributed import destroy_process_group, init_process_group
+from torch.nn.parallel import DistributedDataParallel as DDP
+from tqdm import tqdm
 
 model_id = {
     "cifar10-32": ["google/ddpm-cifar10-32", 50000],
