@@ -157,6 +157,10 @@ def inverse_wavelet_packet_transform(
     return rec
 
 
+def kldivergence(output: torch.Tensor, target: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    return target * torch.log((target / output) + eps)
+
+
 def fourier_power_divergence(
     output: torch.Tensor, target: torch.Tensor
 ) -> torch.Tensor:
@@ -165,19 +169,20 @@ def fourier_power_divergence(
 
     Args:
         output (torch.Tensor): The network output.
-        target (torch.Tenso): The target image.
+        target (torch.Tensor): The target image.
 
     Returns:
         (torch.Tensor): A scalar metric.
     """
 
-    radius_no_sqrt = lambda z_comp: torch.real(z_comp) ** 2 + torch.imag(z_comp) ** 2
+    radius_no_sqrt = lambda z_comp: torch.sqrt(torch.real(z_comp) ** 2 + torch.imag(z_comp) ** 2)
 
     output_fft = torch.fft.fft2(output)
-    output_power = radius_no_sqrt(output_fft)
-    target_fft = torch.fft.fft2(target)
-    target_power = radius_no_sqrt(target_fft)
-    return torch.mean(F.kl_div(torch.log(output_power + 1e-8), target_power))
+    output_power = torch.log(torch.abs(radius_no_sqrt(output_fft)) + 1e-12)
+    target_fft = torch.fft.fft2(target) 
+    target_power = torch.log(torch.abs(radius_no_sqrt(target_fft))+ 1e-12)
+    return torch.mean(F.kl_div(output_power, target_power, log_target=True)), torch.mean(F.kl_div(target_power, output_power, log_target=True))
+    # return torch.mean(kldivergence(output_power, target_power))
 
 
 def wavelet_packet_power_divergence(
@@ -205,6 +210,9 @@ def wavelet_packet_power_divergence(
     output_packets = forward_wavelet_packet_transform(output, max_level=level)
     target_packets = forward_wavelet_packet_transform(target, max_level=level)
 
-    output_energy = output_packets**2
-    target_energy = target_packets**2
-    return torch.mean(F.kl_div(torch.log(output_energy + 1e-8), target_energy))
+    # output_energy = torch.abs(output_packets**2)
+    # target_energy = torch.abs(target_packets**2)
+    output_energy = torch.log(torch.abs(output_packets**2) + 1e-12)
+    target_energy = torch.log(torch.abs(target_packets**2) + 1e-12)
+    return torch.mean(F.kl_div(output_energy, target_energy, log_target=True)), torch.mean(F.kl_div(target_energy, output_energy, log_target=True))
+    # return torch.mean(kldivergence(output_energy, target_energy))
