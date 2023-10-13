@@ -157,8 +157,8 @@ def inverse_wavelet_packet_transform(
     return rec
 
 
-def kldivergence(output: torch.Tensor, target: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
-    return target * torch.log((target / output) + eps)
+def compute_kl_divergence(output: torch.Tensor, target: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
+    return target * torch.log(((target + eps) / (output + eps)))
 
 
 def fourier_power_divergence(
@@ -174,15 +174,25 @@ def fourier_power_divergence(
     Returns:
         (torch.Tensor): A scalar metric.
     """
+    assert output.shape == target.shape, "Sampled and reference images should have same shape."
+    
+    output_fft = torch.abs(torch.fft.fft2(output)) ** 2
+    target_fft = torch.abs(torch.fft.fft2(target)) ** 2
+    
+    b, c, _, _  = output_fft.shape
+    
+    output_power = torch.reshape(output_fft, (c, -1))
+    target_power = torch.reshape(target_fft, (c, -1))
+    output_power = output_power / torch.sum(output_power, dim=-1, keepdim=True)
+    target_power = target_power / torch.sum(target_power, dim=-1, keepdim=True)
 
-    radius_no_sqrt = lambda z_comp: torch.sqrt(torch.real(z_comp) ** 2 + torch.imag(z_comp) ** 2)
 
-    output_fft = torch.fft.fft2(output)
-    output_power = torch.log(torch.abs(radius_no_sqrt(output_fft)) + 1e-12)
-    target_fft = torch.fft.fft2(target) 
-    target_power = torch.log(torch.abs(radius_no_sqrt(target_fft))+ 1e-12)
-    return torch.mean(F.kl_div(output_power, target_power, log_target=True)), torch.mean(F.kl_div(target_power, output_power, log_target=True))
-    # return torch.mean(kldivergence(output_power, target_power))
+    kld_AB = compute_kl_divergence(output_power, target_power)
+    kld_BA = compute_kl_divergence(target_power, output_power)
+    
+    kld_AB = torch.sum(kld_AB, dim=-1)
+    kld_BA = torch.sum(kld_BA, dim=-1)
+    return torch.mean(kld_AB), torch.mean(kld_BA)
 
 
 def wavelet_packet_power_divergence(
@@ -207,12 +217,23 @@ def wavelet_packet_power_divergence(
     Returns:
         torch.Tensor: Wavelet power divergence metric
     """
+    assert output.shape == target.shape, "Sampled and reference images should have same shape."
+
     output_packets = forward_wavelet_packet_transform(output, max_level=level)
     target_packets = forward_wavelet_packet_transform(target, max_level=level)
 
-    # output_energy = torch.abs(output_packets**2)
-    # target_energy = torch.abs(target_packets**2)
-    output_energy = torch.log(torch.abs(output_packets**2) + 1e-12)
-    target_energy = torch.log(torch.abs(target_packets**2) + 1e-12)
-    return torch.mean(F.kl_div(output_energy, target_energy, log_target=True)), torch.mean(F.kl_div(target_energy, output_energy, log_target=True))
-    # return torch.mean(kldivergence(output_energy, target_energy))
+    output_energy = torch.abs(output_packets) ** 2
+    target_energy = torch.abs(target_packets) ** 2
+
+    b, p, c, _, _ = output_packets.shape
+    output_energy = output_energy.reshape((p, c, -1))
+    target_energy = target_energy.reshape((p, c, -1))
+    
+    output_power = output_energy / torch.sum(output_energy, dim=-1, keepdim=True)
+    target_power = target_energy / torch.sum(target_energy, dim=-1, keepdim=True)
+    kld_AB = compute_kl_divergence(output_power, target_power)
+    kld_BA = compute_kl_divergence(target_power, output_power)
+    
+    kld_AB = torch.sum(kld_AB, dim=-1)
+    kld_BA = torch.sum(kld_BA, dim=-1)
+    return torch.mean(kld_AB), torch.mean(kld_BA)
