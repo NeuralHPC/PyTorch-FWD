@@ -28,13 +28,19 @@ echo Nodes: $nodes_array
 
 export PYTHONPATH=.
 
+
 # CIFAR10
 # Approx one day to train, following facebook if increased batch_size by k, increase lr by factor of k**0.5. Default lr is 2e-4 for batch-size 128.
-# Training
-srun torchrun --nnodes 2 --nproc_per_node 4 --rdzv_id $RANDOM --rdzv_backend c10d --rdzv_endpoint $head_node:29500 scripts/train.py --batch-size 128 --seed 42 --time-steps 1000 --dataset="CIFAR10" --epochs 300 --distribute
-# Sampling
-srun torchrun --nnodes 2 --nproc_per_node 4 --rdzv_id $RANDOM --rdzv_backend c10d --rdzv_endpoint $head_node:29500 scripts/sample.py --ckpt-path="<give path here>" --input-shape 32 --dataset="CIFAR10" --sampler="DDPM" --batch-size 2500 --distribute
+# Training normal
+# echo "CIFAR10 training normal"
+# srun torchrun --nnodes 2 --nproc_per_node 4 --rdzv_id $RANDOM --rdzv_backend c10d --rdzv_endpoint $head_node:29500 scripts/train.py --batch-size 2048 --seed 42 --time-steps 1000 --dataset="CIFAR10" --epochs 300 --distribute --lr 8e-4
+# Training Wavelet loss (Unnormalized)
+echo "CIFAR10 training wavelet loss"
+srun torchrun --nnodes 2 --nproc_per_node 4 --rdzv_id $RANDOM --rdzv_backend c10d --rdzv_endpoint $head_node:29500 scripts/train.py --batch-size 2048 --seed 42 --time-steps 1000 --dataset="CIFAR10" --epochs 300 --distribute --lr 8e-4 --loss-type 'PACKET' --max-level=1
 
+# Sampling
+# echo "CIFAR10 sampling"
+# srun torchrun --nnodes 2 --nproc_per_node 4 --rdzv_id $RANDOM --rdzv_backend c10d --rdzv_endpoint $head_node:29500 scripts/sample.py --ckpt-path="<give path here>" --input-shape 32 --dataset="CIFAR10" --sampler="DDPM" --batch-size 2500 --distribute
 
 end=$(date +%s)
 echo "Elapsed Time: $(($end-$start)) seconds"

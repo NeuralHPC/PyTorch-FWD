@@ -175,7 +175,7 @@ class CheckpointFunction(torch.autograd.Function):
         return (None, None) + input_grads
 
 
-def get_loss_fn(args: argparse.NameSpace, weights=None):
+def get_loss_fn(args: argparse.Namespace, weights=None):
     if args.loss_type.lower() == "mse":
         return nn.MSELoss()
     elif args.loss_type.lower() == "packet":

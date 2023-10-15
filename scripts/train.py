@@ -83,7 +83,7 @@ def main():
         raise ValueError(
             "Datapath is None, please set the datapath in corresponding config file."
         )
-    if not os.path.exists(config.data_dir):
+    if (not os.path.exists(config.data_dir)) and ('CIFAR' not in args.dataset):
         raise ValueError(
             "Data directory doesnot exist, please provide proper path in corresponding config file."
         )
@@ -113,8 +113,9 @@ def main():
 
     # model utils intialization
     weights = None
-    if "weight" in args.packet_norm_type:
-        weights = config.norm_weights[f"{args.wavelet.lower()}_l{args.max_level}"]
+    if args.packet_norm_type is not None:
+        if "weight" in args.packet_norm_type:
+            weights = config.norm_weights[f"{args.wavelet.lower()}_l{args.max_level}"]
     loss_fn = get_loss_fn(args, weights=weights)
     args.clip_grad_norm = (
         config.optimizer_config["clip_grad_norm"]
@@ -127,7 +128,7 @@ def main():
         )
     learning_rate = (
         args.lr
-        if args.lr is not None and args.lr != learning_rate
+        if args.lr is not None and args.lr != config.optimizer_config["lr"]
         else config.optimizer_config["lr"]
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)

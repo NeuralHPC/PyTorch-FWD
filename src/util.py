@@ -75,7 +75,7 @@ def _parse_args():
     parser.add_argument(
         "--wavelet",
         type=str,
-        default="Haar",
+        default="db2",
         choices=["Haar", "db2"],
         help="Type of wavelet for packet loss computation.",
     )
