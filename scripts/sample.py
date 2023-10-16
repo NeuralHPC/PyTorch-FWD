@@ -25,7 +25,7 @@ def main():
         raise ValueError(
             "Datapath is None, please set the datapath in corresponding config file."
         )
-    if not os.path.exists(config.data_dir):
+    if not os.path.exists(config.data_dir) and ('CIFAR' not in args.dataset):
         raise ValueError(
             "Data directory doesnot exist, please provide proper path in corresponding config file."
         )
