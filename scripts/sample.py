@@ -48,6 +48,7 @@ def main():
     save_path = f"./sample_imgs_{args.dataset}_{args.sampler}/"
     os.makedirs(save_path, exist_ok=True)
 
+    args.batch_size = args.batch_size // dist.get_world_size()
     sampler = Sampler(
         model=model,
         args=args,
