@@ -112,7 +112,7 @@ def _sampler_args():
     )
     parser.add_argument("--seed", type=int, default=42, help="Seed value")
     parser.add_argument(
-        "--diff-steps", type=int, default=40, help="Number of diffusion steps"
+        "--diff-steps", type=int, default=1000, help="Number of diffusion steps"
     )
     parser.add_argument(
         "--dataset",

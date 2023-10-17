@@ -12,6 +12,7 @@ from src.util import _sampler_args
 
 def main():
     global args
+    print(args)
     config = load_config(args.dataset)
     if args.allow_tf32:
         torch.backends.cuda.matmul.allow_tf32 = True
