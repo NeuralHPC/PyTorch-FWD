@@ -29,5 +29,5 @@ change the parameters in the torchrun for various datasets and samplers.
 # FID
 Computing the FID
 ```
-PYTHONPATH=. python scripts/compute_fid.py --data-dir <dataset_path> --input-size <64> --sample-sir <sampled_activations>
+PYTHONPATH=. python scripts/fid/fid.py --ref-path=<reference data path> --sample-path=<Generated data path> --device <device>
 ```
