@@ -2,9 +2,10 @@ import argparse
 import torch
 import glob
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
+from torchvision import transforms, datasets
 from tqdm import tqdm
 from PIL import Image
+import numpy as np
 from src.freq_math import fourier_power_divergence, wavelet_packet_power_divergence
 
 class ImgSet(Dataset):
@@ -30,6 +31,19 @@ class ImgSet(Dataset):
         return img
     
 
+class TensorSet(Dataset):
+    def __init__(self, data: torch.Tensor) -> None:
+        super().__init__()
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index) -> torch.Tensor:
+        img = self.data[index, :, :, :]
+        return img.permute(2, 0, 1)
+
+
 def main():
     global args
     ref_path = args.ref_path
@@ -42,8 +56,19 @@ def main():
         128: 3,
         256: 4,
     }
-
-    refloader = DataLoader(ImgSet(data_path=ref_path), batch_size=batch_size, shuffle=True, pin_memory=True)
+    if 'imagenet' in ref_path.lower():
+        data = np.load(ref_path)['arr_0']
+        refloader = DataLoader(TensorSet(data=data), batch_size=batch_size, shuffle=True, pin_memory=True)
+    elif ('church' not in ref_path.lower()) and ('bedroom' not in ref_path.lower()):
+        refloader = DataLoader(ImgSet(data_path=ref_path), batch_size=batch_size, shuffle=True, pin_memory=True)
+    else:
+        cls ='church_outdoor_train' if 'church' in ref_path else 'bedroom_train'
+        transforms = transforms.Compose([
+            transforms.Resize((256,256)),
+            transforms.ToTensor()
+        ])
+        dataset = datasets.LSUN(ref_path, classes=cls, transform=transforms)
+        refloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
     sampleloader = DataLoader(ImgSet(data_path=sample_path), batch_size=batch_size, shuffle=True, pin_memory=True)
 
     fft_vals, fft_vals_inv = 0.0, 0.0
@@ -56,15 +81,6 @@ def main():
     if len(refloader) > len(sampleloader):
         min_loader = sampleloader
 
-    # for _ in tqdm(range(len(min_loader))):
-    #     ref_batch = next(iter(refloader))
-    #     sample_batch = next(iter(sampleloader))
-    #     a, b = fourier_power_divergence(ref_batch, sample_batch)
-    #     fft_vals += a
-    #     fft_vals_inv += b
-    #     x, y = wavelet_packet_power_divergence(ref_batch, sample_batch, level=level)
-    #     packet_vals += x
-    #     packet_vals_inv += y
     ref_imgs, sample_imgs = [], []
     for _ in tqdm(range(len(min_loader))):
         ref_imgs.append(next(iter(refloader)))
