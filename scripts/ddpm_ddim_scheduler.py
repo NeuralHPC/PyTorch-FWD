@@ -45,8 +45,8 @@ class Sampler:
                         noisy_res, t, input
                     ).prev_sample
                     input = prev_noisy_sample
-                images = (input / 2 + 0.5).clamp(0, 1)
-                np_images = images.cpu().permute(0, 2, 3, 1).numpy()
+                # images = (input / 2 + 0.5).clamp(0, 1)
+                np_images = input.cpu().permute(0, 2, 3, 1).numpy()
                 # print(f"[GPU: {self.global_rank}], Img shape: {np_images.shape}")
                 str_time = str(time.time()).replace(".", "_")
                 fname = f"batch_{str_time}.npz"
