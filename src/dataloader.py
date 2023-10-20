@@ -5,7 +5,8 @@ from typing import Dict, Tuple
 import torch
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
-from torchvision import datasets, io, transforms
+from torchvision import datasets, transforms
+from PIL import Image
 
 
 class CelebAHQDataset(Dataset):
@@ -57,7 +58,8 @@ class CelebAHQDataset(Dataset):
             Tuple[torch.Tensor, int]: A tuple containing image and its label
         """
         img_path = os.path.join(self.data_path, self.img_names[index])
-        img = io.read_image(img_path)
+        # img = io.read_image(img_path)
+        img = Image.open(img_path)
         if self.transform:
             img = self.transform(img)
         label = self.labels[self.img_names[index]]
