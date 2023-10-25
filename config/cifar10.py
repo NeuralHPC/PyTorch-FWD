@@ -22,7 +22,7 @@ class CIFAR10:
             "attn_res": tuple([16]),
             "dropout": 0.1,
             "channel_mult": tuple([1, 2, 2, 2]),
-            "num_classes": 1000,
+            "num_classes": 10,
             "num_heads": 4,
             "num_heads_ups": 4,
             "use_scale_shift_norm": True,

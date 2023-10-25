@@ -34,7 +34,7 @@ class ImgSet(Dataset):
 class TensorSet(Dataset):
     def __init__(self, data: torch.Tensor) -> None:
         super().__init__()
-        self.data = data
+        self.data = torch.from_numpy(data)/127.5 - 1
 
     def __len__(self):
         return len(self.data)
@@ -49,6 +49,7 @@ def main():
     ref_path = args.ref_path
     sample_path = args.sample_path
     batch_size = 100
+    lsun_dataset = False
 
     level_dict = {
         32 : 1,
@@ -62,12 +63,13 @@ def main():
     elif ('church' not in ref_path.lower()) and ('bedroom' not in ref_path.lower()):
         refloader = DataLoader(ImgSet(data_path=ref_path), batch_size=batch_size, shuffle=True, pin_memory=True)
     else:
+        lsun_dataset = True
         cls ='church_outdoor_train' if 'church' in ref_path else 'bedroom_train'
-        transforms = transforms.Compose([
+        transfs = transforms.Compose([
             transforms.Resize((256,256)),
             transforms.ToTensor()
         ])
-        dataset = datasets.LSUN(ref_path, classes=cls, transform=transforms)
+        dataset = datasets.LSUN(ref_path, classes=[cls], transform=transfs)
         refloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
     sampleloader = DataLoader(ImgSet(data_path=sample_path), batch_size=batch_size, shuffle=True, pin_memory=True)
 
@@ -82,9 +84,17 @@ def main():
         min_loader = sampleloader
 
     ref_imgs, sample_imgs = [], []
+    no_imgs = 0
     for _ in tqdm(range(len(min_loader))):
-        ref_imgs.append(next(iter(refloader)))
+        if lsun_dataset:
+            ref_imgs.append(next(iter(refloader))[0])
+            if no_imgs >= 30000:
+                break
+        else:
+            ref_imgs.append(next(iter(refloader)))
         sample_imgs.append(next(iter(sampleloader)))
+        no_imgs += batch_size
+
     ref_imgs = torch.cat(ref_imgs, axis=0)
     sample_imgs = torch.cat(sample_imgs, axis=0)
     
