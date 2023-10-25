@@ -35,9 +35,9 @@ class CelebAHQDataset(Dataset):
             Dict[str, int]: Dictionary containing image name and label
         """
         hq_labels = json.load(open(path, "r"))
-        for key, value in hq_labels.items():
-            value = int(value.replace("\n", ""))
-            hq_labels[key] = value
+        # for key, value in hq_labels.items():
+        #     value = int(value.replace("\n", ""))
+        #     hq_labels[key] = value
         return hq_labels
 
     def __len__(self) -> int:

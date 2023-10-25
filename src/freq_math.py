@@ -196,7 +196,7 @@ def fourier_power_divergence(
 
 
 def wavelet_packet_power_divergence(
-    output: torch.Tensor, target: torch.Tensor, level: int = 3
+    output: torch.Tensor, target: torch.Tensor, level: int = 3, wavelet: str = 'db5'
 ) -> torch.Tensor:
     """Compute the wavelet packet power divergence.
 
@@ -213,14 +213,16 @@ def wavelet_packet_power_divergence(
     Args:
         output (torch.Tensor): The network output
         target (torch.Tensor): The target image
+        level  (int): Wavelet level to use. Defaults to 3
+        wavelet(str): Type of wavelet to use. Defaults to db5 
 
     Returns:
         torch.Tensor: Wavelet power divergence metric
     """
     assert output.shape == target.shape, "Sampled and reference images should have same shape."
 
-    output_packets = forward_wavelet_packet_transform(output, max_level=level)
-    target_packets = forward_wavelet_packet_transform(target, max_level=level)
+    output_packets = forward_wavelet_packet_transform(output, max_level=level, wavelet=wavelet)
+    target_packets = forward_wavelet_packet_transform(target, max_level=level, wavelet=wavelet)
 
     output_energy = torch.abs(output_packets) ** 2
     target_energy = torch.abs(target_packets) ** 2
@@ -231,8 +233,15 @@ def wavelet_packet_power_divergence(
     
     output_power = output_energy / torch.sum(output_energy, dim=-1, keepdim=True)
     target_power = target_energy / torch.sum(target_energy, dim=-1, keepdim=True)
+    del output_energy
+    del target_energy
+    del output_packets
+    del target_packets
+
     kld_AB = compute_kl_divergence(output_power, target_power)
     kld_BA = compute_kl_divergence(target_power, output_power)
+    del output_power
+    del target_power
     
     kld_AB = torch.sum(kld_AB, dim=-1)
     kld_BA = torch.sum(kld_BA, dim=-1)

@@ -40,6 +40,7 @@ class Trainer:
         if args.distribute:
             self.__global_rank = _get_global_rank()
 
+        self.__elapsed_epochs = 0
         # Initialize the model.
         self.model = model.to(self.__local_rank)
         if args.model_path is not None:
@@ -54,7 +55,6 @@ class Trainer:
         self.__optimizer = optimizer
         self.__loss_fn = loss_fn
         self.__tensorboard = writer
-        self.__elapsed_epochs = 0
         self.__clip_grad_norm = args.clip_grad_norm
         self.__time_steps = args.time_steps
         self.__save_every = args.save_every
@@ -147,6 +147,7 @@ class Trainer:
                 self.__tensorboard.add_scalar("Train Loss", epoch_loss, epoch)
                 self.__tensorboard.flush()
                 # TODO: Perform generation of 10 images for evaluation purpose
+                # TODO: Log fft PSKL and packet PSKL
                 if (epoch % self.__save_every == 0) or (epoch == max_epochs - 1):
                     self.__save_checkpoint(epoch)
 
