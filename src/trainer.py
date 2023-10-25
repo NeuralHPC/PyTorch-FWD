@@ -176,7 +176,7 @@ class Trainer:
                 if (epoch % self.__save_every == 0) or (epoch == max_epochs - 1):
                     self.__save_checkpoint(epoch)
 
-    def __validation_sample(bs: int, dataloader: DataLoader) -> Tuple[torch.Tensor]:
+    def __validation_sample(self, bs: int, dataloader: DataLoader) -> Tuple[torch.Tensor]:
         """Generate samples for validation purpose.
 
         Args:
@@ -196,7 +196,7 @@ class Trainer:
                 class_labels=labels,
                 model=self.model,
                 max_steps=self.__time_steps,
-                input_shape=(bs, 3, self.__input_dim, self.__input_dim)
+                input_shape=(bs, 3, self.__input_dim, self.__input_dim),
                 device=self.__local_rank
             )
 
