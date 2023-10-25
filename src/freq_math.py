@@ -196,7 +196,7 @@ def fourier_power_divergence(
 
 
 def wavelet_packet_power_divergence(
-    output: torch.Tensor, target: torch.Tensor, level: int = 3, wavelet: str = 'db5'
+    output: torch.Tensor, target: torch.Tensor, level: int = 3, wavelet: str = 'db3'
 ) -> torch.Tensor:
     """Compute the wavelet packet power divergence.
 
@@ -220,6 +220,7 @@ def wavelet_packet_power_divergence(
         torch.Tensor: Wavelet power divergence metric
     """
     assert output.shape == target.shape, "Sampled and reference images should have same shape."
+    print(f"Using wavelet: {wavelet} with level: {level}")
 
     output_packets = forward_wavelet_packet_transform(output, max_level=level, wavelet=wavelet)
     target_packets = forward_wavelet_packet_transform(target, max_level=level, wavelet=wavelet)
