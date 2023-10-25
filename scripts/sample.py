@@ -45,7 +45,8 @@ def main():
         batch_size=args.batch_size,
         num_workers=config.dataset_config["num_workers"],
     )
-    save_path = f"./sample_imgs_{args.dataset}_{args.sampler}/"
+    path_nm = args.ckpt_path.split/('/')[-2]
+    save_path = f"./sample_imgs_{args.sampler}_{path_nm}/"
     os.makedirs(save_path, exist_ok=True)
 
     args.batch_size = args.batch_size // dist.get_world_size()
