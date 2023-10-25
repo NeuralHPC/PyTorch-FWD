@@ -161,19 +161,21 @@ class Trainer:
             if self.__global_rank == 0:
                 print(f"Training loss: {epoch_loss}", flush=True)
                 self.__tensorboard.add_scalar("Train Loss", epoch_loss, epoch)
-                # Sample validation set
-                sample_imgs, original_imgs = self.__validation_sample(32, dataloader)
-                self.__tensorboard.add_images("Original images", original_imgs[:8, :, :, :], epoch)
-                self.__tensorboard.add_images("Sampled images", sample_imgs[:8, :, :, :], epoch)
-                # Compute fourier and wavelet power spectrum loss
-                fft_ab, fft_ba = fourier_power_divergence(sample_imgs, original_imgs)
-                packet_ab, packet_ba = wavelet_packet_power_divergence(sample_imgs, original_imgs)
-                fft_mean = 0.5 * (fft_ab + fft_ba)
-                packet_mean = 0.5 * (packet_ab + packet_ba)
-                self.__tensorboard.add_scalar("PS_fft_KLD", fft_mean, epoch)
-                self.__tensorboard.add_scalar("PS_packet_KLD", packet_mean, epoch)
-                self.model.train()
-                if (epoch % self.__save_every == 0) or (epoch == max_epochs - 1):
+                last_epoch = epoch == max_epochs - 1
+                if (epoch % 5 == 0) or last_epoch:
+                    # Sample validation set
+                    sample_imgs, original_imgs = self.__validation_sample(32, dataloader)
+                    self.__tensorboard.add_images("Original images", original_imgs[:8, :, :, :], epoch)
+                    self.__tensorboard.add_images("Sampled images", sample_imgs[:8, :, :, :], epoch)
+                    # Compute fourier and wavelet power spectrum loss
+                    fft_ab, fft_ba = fourier_power_divergence(sample_imgs, original_imgs)
+                    packet_ab, packet_ba = wavelet_packet_power_divergence(sample_imgs, original_imgs)
+                    fft_mean = 0.5 * (fft_ab + fft_ba)
+                    packet_mean = 0.5 * (packet_ab + packet_ba)
+                    self.__tensorboard.add_scalar("PS_fft_KLD", fft_mean.item(), epoch)
+                    self.__tensorboard.add_scalar("PS_packet_KLD", packet_mean.item(), epoch)
+                    self.model.train()
+                if (epoch % self.__save_every == 0) or last_epoch:
                     self.__save_checkpoint(epoch)
 
     def __validation_sample(self, bs: int, dataloader: DataLoader) -> Tuple[torch.Tensor]:
