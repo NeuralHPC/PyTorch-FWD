@@ -155,6 +155,9 @@ def main():
         loss_fn=loss_fn,
         writer=writer,
         save_path=save_path,
+        std=config.dataset_config["std"],
+        mean=config.dataset_config["mean"],
+        input_shape=config.model_config["input_size"]
     )
     trainer.train(
         max_epochs=args.epochs, dataloader=train_loader, sampler=train_sampler

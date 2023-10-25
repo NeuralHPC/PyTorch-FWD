@@ -1,7 +1,7 @@
 """Torch DDP training script for diffusion."""
 import argparse
 import os.path
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 
 import torch
 import torch.nn as nn
@@ -10,7 +10,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, Sampler
 from torch.utils.tensorboard import SummaryWriter
 
-from src.sample_util import linear_noise_scheduler, sample_noise
+from src.freq_math import fourier_power_divergence, wavelet_packet_power_divergence
+from src.sample_util import linear_noise_scheduler, sample_noise, sample_DDPM
 from src.util import _get_global_rank, _get_local_rank
 
 
@@ -23,6 +24,9 @@ class Trainer:
         loss_fn: nn.Module,
         writer: Union[SummaryWriter, None],
         save_path: str,
+        std: List[float] = [],
+        mean: List[float] = [],
+        input_shape: int = 32
     ) -> None:
         """DDP Train class.
 
@@ -33,6 +37,9 @@ class Trainer:
             loss_fn (nn.Module): Loss function
             writer (Union[SummaryWriter, None]): tensorboard writer object for process 0 else None
             save_path (str): Path to save the model
+            std (List[float]): Standard deviation of the dataset if any. Defaults to empty list
+            mean (List[float]): Mean of the dataset if any. Defaults to empty list
+            input_shape (int): Input dimension shape
         """
         # Initialize ranks of device.
         self.__local_rank = _get_local_rank()
@@ -60,6 +67,15 @@ class Trainer:
         self.__save_every = args.save_every
         self.__save_path = save_path
         self.__print_every = args.print_every
+        self.__std, self.__mean = torch.empty((1, 3, 1, 1)), torch.empty((1, 3, 1, 1))
+        if len(std) != 0 and len(mean) != 0:
+            self.__std = torch.reshape(torch.tensor(std), (1, 3, 1, 1)).to(
+                self.__local_rank
+            )
+            self.__mean = torch.reshape(torch.tensor(mean), (1, 3, 1, 1)).to(
+                self.__local_rank
+            )
+        self.__input_dim = input_shape
 
     def __load_checkpoint(self, path: str) -> None:
         """Load the existing checkpoint.
@@ -145,11 +161,50 @@ class Trainer:
             if self.__global_rank == 0:
                 print(f"Training loss: {epoch_loss}", flush=True)
                 self.__tensorboard.add_scalar("Train Loss", epoch_loss, epoch)
-                self.__tensorboard.flush()
-                # TODO: Perform generation of 10 images for evaluation purpose
-                # TODO: Log fft PSKL and packet PSKL
+                # Sample validation set
+                sample_imgs, original_imgs = self.__validation_sample(32, dataloader)
+                self.__tensorboard.add_images("Original images", original_imgs[:8, :, :, :], epoch)
+                self.__tensorboard.add_images("Sampled images", sample_imgs[:8, :, :, :], epoch)
+                # Compute fourier and wavelet power spectrum loss
+                fft_ab, fft_ba = fourier_power_divergence(sample_imgs, original_imgs)
+                packet_ab, packet_ba = wavelet_packet_power_divergence(sample_imgs, original_imgs)
+                fft_mean = 0.5 * (fft_ab + fft_ba)
+                packet_mean = 0.5 * (packet_ab + packet_ba)
+                self.__tensorboard.add_scalar("PS_fft_KLD", fft_mean, epoch)
+                self.__tensorboard.add_scalar("PS_packet_KLD", packet_mean, epoch)
+                self.model.train()
                 if (epoch % self.__save_every == 0) or (epoch == max_epochs - 1):
                     self.__save_checkpoint(epoch)
+
+    def __validation_sample(bs: int, dataloader: DataLoader) -> Tuple[torch.Tensor]:
+        """Generate samples for validation purpose.
+
+        Args:
+            bs (int): Batch size for validation
+            dataloader (DataLoader): Training datalaoder for labels
+        
+        Returns:
+            Tuple[torch.Tensor]: Tuple containing sampled and original images
+        """
+        with torch.no_grad():
+            self.model.eval()
+            imgs, labels = next(iter(dataloader))
+            imgs, labels = imgs[:bs, :, :, :], labels[:bs]
+            imgs = imgs.to(self.__local_rank)
+
+            x_0 = sample_DDPM(
+                class_labels=labels,
+                model=self.model,
+                max_steps=self.__time_steps,
+                input_shape=(bs, 3, self.__input_dim, self.__input_dim)
+                device=self.__local_rank
+            )
+
+            if self.__std.nelement() != 0  and self.__mean.nelement() != 0:
+                x_0 = (x_0 * self.__std) + self.__mean
+                imgs = (imgs * self.__std) + self.__mean
+            assert x_0.shape == imgs.shape, "generated images must be same shape as input."
+            return x_0, imgs
 
     def __preprocess_input(self, input_imgs: torch.Tensor) -> Tuple[torch.Tensor]:
         """Apply noising to the input images.
