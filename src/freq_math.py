@@ -196,7 +196,7 @@ def fourier_power_divergence(
 
 
 def wavelet_packet_power_divergence(
-    output: torch.Tensor, target: torch.Tensor, level: int = 3, wavelet: str = 'db3'
+    output: torch.Tensor, target: torch.Tensor, level: int = 3, wavelet: str = 'db5'
 ) -> torch.Tensor:
     """Compute the wavelet packet power divergence.
 
