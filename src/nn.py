@@ -241,7 +241,7 @@ def PacketLoss(
         norm_weights = torch.reshape(torch.Tensor(norm_weights), (1, -1, 1, 1, 1))
         return norm_weights * packets
 
-    def log_scale_packets(packets: torch.Tensor) -> torch.Tensor:
+    def log_scale_packets(packets: torch.Tensor) -> torch.Tensor:    #TODO: Rename this to max scaling instead of log scaling
         """Normalize packets by log scaling.
 
         Args:
@@ -250,7 +250,9 @@ def PacketLoss(
         Returns:
             torch.Tensor: log scale normalized packets
         """
-        return torch.sign(packets) * torch.log(torch.abs(packets) + 1e-8)
+        # return torch.sign(packets) * torch.log(torch.abs(packets) + 1e-8)
+        packets_max = torch.amax(torch.abs(packets), dim=(0, 2, 3, 4), keepdim=True)
+        return packets / (packets_max + 1e-12)
 
     output_packets = forward_wavelet_packet_transform(output, wavelet, level)
     target_packets = forward_wavelet_packet_transform(target, wavelet, level)
