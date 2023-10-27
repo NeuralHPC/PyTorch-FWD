@@ -7,6 +7,7 @@ from src.freq_math import (
     wavelet_packet_power_divergence,
     fourier_frechet_distance,
     wavelet_packet_frechet_distance,
+    forward_wavelet_packet_transform
 )
 
 
@@ -39,5 +40,6 @@ def test_fourier_frechet():
 
 def test_packet_frechet():
     face = torch.randn((1000, 3, 256, 256))
-    ffd = wavelet_packet_frechet_distance(face, face)
-    assert np.allclose(ffd, 0)
+    packets = forward_wavelet_packet_transform(face, max_level=4, wavelet='sym5')
+    fpd = wavelet_packet_frechet_distance(packets, packets)
+    assert np.allclose(fpd, 0)

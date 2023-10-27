@@ -6,6 +6,7 @@ import ptwt
 import pywt
 import torch
 import torch.nn.functional as F
+from copy import deepcopy
 
 from scipy import linalg
 
@@ -160,7 +161,8 @@ def inverse_wavelet_packet_transform(
 
 
 def compute_kl_divergence(output: torch.Tensor, target: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
-    return target * torch.log(((target + eps) / (output + eps)))
+    # Tried with eps 1e-30 and this improves the precision by a small margin but overall ranking remains the same
+    return target * torch.log(((target) / (output + eps)) + eps)
 
 
 def fourier_power_divergence(
@@ -226,6 +228,11 @@ def wavelet_packet_power_divergence(
 
     output_packets = forward_wavelet_packet_transform(output, max_level=level, wavelet=wavelet)
     target_packets = forward_wavelet_packet_transform(target, max_level=level, wavelet=wavelet)
+    
+    fpd = wavelet_packet_frechet_distance(
+        deepcopy(output_packets),
+        deepcopy(target_packets)
+        )
 
     output_energy = torch.abs(output_packets) ** 2
     target_energy = torch.abs(target_packets) ** 2
@@ -248,7 +255,7 @@ def wavelet_packet_power_divergence(
     
     kld_AB = torch.sum(kld_AB, dim=-1)
     kld_BA = torch.sum(kld_BA, dim=-1)
-    return torch.mean(kld_AB), torch.mean(kld_BA)
+    return torch.mean(kld_AB), torch.mean(kld_BA), fpd
 
 
 def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarray, sigma2: np.ndarray, eps: float = 1e-12) -> np.ndarray:
@@ -295,24 +302,18 @@ def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarra
             + np.trace(sigma2) - 2 * tr_covmean)
 
 def wavelet_packet_frechet_distance(
-        output: torch.Tensor, target: torch.Tensor, level: int = 3, wavelet: str = 'sym5'
+        output_packets: torch.Tensor, target_packets: torch.Tensor
 ) -> np.ndarray:
-    """ Compute the frechet packet distance.
+    """Compute the frechet packet distance.
 
     Args:
-        output (torch.Tensor): The network output
-        target (torch.Tensor): The target image
-        level (int, optional): Wavelet level to use. Defaults to 3
-        wavelet (str, optional): Type of wavelet to use. Defaults to 'sym5'
+        output_packets (torch.Tensor): The network output packets
+        target_packets (torch.Tensor): The target image packets
 
     Returns:
         np.ndarray: Frechet packet distance
     """
-    assert output.shape == target.shape, "Sampled and reference images should have same shape."
-    print(f"Using wavelet: {wavelet} with level: {level}")
-
-    output_packets = forward_wavelet_packet_transform(output, max_level=level, wavelet=wavelet)
-    target_packets = forward_wavelet_packet_transform(target, max_level=level, wavelet=wavelet)
+    assert output_packets.shape == target_packets.shape, "Sampled and reference packets should have same shape."
 
     b, p, c, h, w = output_packets.shape
     output_energy = np.reshape(np.absolute(output_packets.numpy()) ** 2, (b*p*c, h*w))
@@ -326,17 +327,17 @@ def wavelet_packet_frechet_distance(
     mu2 = np.mean(target_energy, axis=0)
     sigma2 = np.cov(target_energy, rowvar=False)
 
-    fwd = compute_frechet_distance(
+    fpd = compute_frechet_distance(
         mu1=mu1, mu2=mu2,
         sigma1=sigma1, sigma2=sigma2
     )
-    return fwd
+    return fpd
 
 
 def fourier_frechet_distance(
         output: torch.Tensor, target: torch.Tensor
 ) -> np.ndarray:
-    """ Compute frechet frequency distance.
+    """Compute frechet frequency distance.
 
     Args:
         output (torch.Tensor): The network output
