@@ -251,7 +251,7 @@ def wavelet_packet_power_divergence(
     return torch.mean(kld_AB), torch.mean(kld_BA)
 
 
-def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarray, sigma2: np.ndarray, eps: 1e-12) -> np.ndarray:
+def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarray, sigma2: np.ndarray, eps: float = 1e-12) -> np.ndarray:
     """Numpy implementation of the Frechet Distance.
     The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
     and X_2 ~ N(mu_2, C_2) is
@@ -327,13 +327,10 @@ def wavelet_packet_frechet_distance(
     output_packets = forward_wavelet_packet_transform(output, max_level=level, wavelet=wavelet)
     target_packets = forward_wavelet_packet_transform(target, max_level=level, wavelet=wavelet)
 
-    output_packets = torch.mean(output_packets, dim=(0, 1, 2)).numpy()
-    target_packets = torch.mean(target_packets, dim=(0, 1, 2)).numpy()
-
-    k, h, w = output_packets.shape
-    output_energy = np.reshape(np.absolute(output_packets) ** 2, (k, h*w))
+    b, p, c, h, w = output_packets.shape
+    output_energy = np.reshape(np.absolute(output_packets.numpy()) ** 2, (b*p*c, h*w))
     del output_packets
-    target_energy = np.reshape(np.absolute(target_packets) ** 2, (k, h*w))
+    target_energy = np.reshape(np.absolute(target_packets.numpy()) ** 2, (b*p*c, h*w))
     del target_packets
 
     mu1 = np.mean(output_energy, axis=0)
@@ -365,11 +362,11 @@ def fourier_frechet_distance(
 
     output_fft = torch.abs(torch.fft.fft2(output)) ** 2
     target_fft = torch.abs(torch.fft.fft2(target)) ** 2
-
-    output_fft = torch.mean(output_fft, dim=(0, 1)).numpy()
-    target_fft = torch.mean(target_fft, dim=(0, 1)).numpy()
     
-    k, h, w = output_fft.shape
+    b, c, h, w = output_fft.shape
+    output_fft = np.reshape(output_fft.numpy(), (b*c, h*w))
+    target_fft = np.reshape(target_fft.numpy(), (b*c, h*w))
+
     mu1 = np.mean(output_fft, axis=0)
     sigma1 = np.cov(output_fft, rowvar=False)
 
