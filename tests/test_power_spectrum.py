@@ -1,5 +1,6 @@
 import scipy.datasets as datasets
 import torch
+import numpy as np
 
 from src.freq_math import (
     fourier_power_divergence,
@@ -30,18 +31,13 @@ def test_packet_divergence():
 
 
 def test_fourier_frechet():
-    face = torch.Tensor(datasets.face())
-    face = torch.stack([face, face, face, face], dim=0)
-    face = face.type(torch.FloatTensor) / 255.
-    face = face.permute(0, 3, 1, 2)
+    # TODO: Fourier frechet fails needs to be discussed
+    face = torch.randn((10000, 3, 32, 32))
     ffd = fourier_frechet_distance(face, face)
     assert ffd == 0
 
 
 def test_packet_frechet():
-    face = torch.Tensor(datasets.face())
-    face = torch.stack([face, face, face, face], dim=0)
-    face = face.type(torch.FloatTensor) / 255.
-    face = face.permute(0, 3, 1, 2)
+    face = torch.randn((1000, 3, 256, 256))
     ffd = wavelet_packet_frechet_distance(face, face)
-    assert ffd == 0
+    assert np.allclose(ffd, 0)

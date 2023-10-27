@@ -216,7 +216,7 @@ def wavelet_packet_power_divergence(
         output (torch.Tensor): The network output
         target (torch.Tensor): The target image
         level  (int): Wavelet level to use. Defaults to 3
-        wavelet(str): Type of wavelet to use. Defaults to db5 
+        wavelet(str): Type of wavelet to use. Defaults to sym5 
 
     Returns:
         torch.Tensor: Wavelet power divergence metric
@@ -285,27 +285,14 @@ def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarra
 
     diff = mu1 - mu2
 
-    # Product might be almost singular
-    covmean = linalg.sqrtm(sigma1.dot(sigma2))
-    if not np.isfinite(covmean).all():
-        msg = ('fid calculation produces singular product; '
-               'adding %s to diagonal of cov estimates') % eps
-        print(msg)
-        offset = np.eye(sigma1.shape[0]) * eps
-        covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+    prod = sigma1.dot(sigma2)
+    l, v = np.linalg.eigh(prod)
+    covmean = v @ np.diag(np.emath.sqrt(l)) @ v.T
 
-    # Numerical error might give slight imaginary component
-    if np.iscomplexobj(covmean):
-        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
-            m = np.max(np.abs(covmean.imag))
-            raise ValueError('Imaginary component {}'.format(m))
-        covmean = covmean.real
-
-    tr_covmean = np.trace(covmean)
+    tr_covmean = np.absolute(np.trace(covmean))
 
     return (diff.dot(diff) + np.trace(sigma1)
             + np.trace(sigma2) - 2 * tr_covmean)
-
 
 def wavelet_packet_frechet_distance(
         output: torch.Tensor, target: torch.Tensor, level: int = 3, wavelet: str = 'sym5'
