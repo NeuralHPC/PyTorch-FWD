@@ -31,7 +31,7 @@ def load_config(dataset_name: str) -> Any:
     return config
 
 
-def instantiate_model(model_config: Dict[str, Any]) -> nn.Module:
+def instantiate_model(dataset: Dict[str, Any]) -> nn.Module:
     """Instantiate the UNet model.
 
     Args:
@@ -40,6 +40,15 @@ def instantiate_model(model_config: Dict[str, Any]) -> nn.Module:
     Returns:
         nn.Module: Instantiate the model.
     """
+# def instantiate_model(model_config: Dict[str, Any]) -> nn.Module:
+#     """Instantiate the UNet model.
+
+#     Args:
+#         model_config (Dict[str, Any]): Dictionary containing the model configuration details.
+
+#     Returns:
+#         nn.Module: Instantiate the model.
+#     """
     # attn_res = []
     # for value in model_config["attn_res"]:
     #     attn_res.append(model_config["input_size"] // int(value))
@@ -58,7 +67,18 @@ def instantiate_model(model_config: Dict[str, Any]) -> nn.Module:
     #     use_scale_shift_norm=model_config["use_scale_shift_norm"],
     # )
     # return model
-    model = UNet2DModel.from_pretrained("google/ddpm-cifar10-32")
+    name = None
+    if "cifar10" in dataset.lower():
+        name = "google/ddpm-cifar10-32"
+    elif "celeba" in dataset.lower():
+        name = "google/ddpm-celebahq-256"
+    elif "church" in dataset.lower():
+        name = "google/ddpm-church-256"
+    elif "bedroom" in dataset.lower():
+        name = "google/ddpm-bedroom-256"
+    else:
+        raise NotImplementedError('Improper dataset.')
+    model = UNet2DModel.from_pretrained(name)
     return model
 
 
@@ -80,7 +100,9 @@ def main():
     torch.autograd.set_detect_anomaly(True)
     local_rank = _get_local_rank()
     global_rank = _get_global_rank() if args.distribute else local_rank
-    model = instantiate_model(config.model_config)
+    # model = instantiate_model(config.model_config)
+    model = instantiate_model(args.dataset)
+
 
     if config.data_dir is None:
         raise ValueError(

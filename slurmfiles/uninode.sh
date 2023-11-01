@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH -A <project>
+#SBATCH -A holistic-vid-westai
 #SBATCH --nodes=1
 #SBATCH --job-name=diff_train
 #SBATCH --output=./out/diff_train-%j.out  
@@ -14,13 +14,11 @@
 module load CUDA
 module load Python
 
-source <path_to_environment>
+source /p/project/holistic-vid-westai/veeramacheneni2/venvs/mlpytorch/bin/activate
 
 export PYTHONPATH=.
 
-# CIFAR10
-# Approx one day to train, following facebook if increased batch_size by k, increase lr by factor of k**0.5. Default lr is 2e-4 for batch-size 128.
-# Training
-srun torchrun --standalone --nproc_per_node=4 scripts/train.py --batch-size 128 --seed 42 --time-steps 1000 --dataset="CIFAR10" --epochs 300
-# Sampling
-srun torchrun --standalone --nproc_per_node=4 scripts/sample.py --ckpt-path="<give path here>" --input-shape 32 --dataset="CIFAR10" --sampler="DDPM" --batch-size 2500
+# srun torchrun --standalone --nproc_per_node=4 scripts/train.py --batch-size 128 --seed 42 --time-steps 1000 --epochs 100 --loss-type "PACKET" --lr 1e-5 --level 1 --wavelet "sym5" --dataset "CIFAR10"
+srun torchrun --standalone --nproc_per_node=4 scripts/train.py --batch-size 128 --seed 42 --time-steps 1000 --epochs 100 --loss-type "PACKET" --lr 1e-5 --level 4 --wavelet "sym5" --dataset "CELEBAHQ256"
+# srun torchrun --standalone --nproc_per_node=4 scripts/train.py --batch-size 128 --seed 42 --time-steps 1000 --epochs 100 --loss-type "PACKET" --lr 1e-5 --level 4 --wavelet "sym5" --dataset "CHURCH"
+# srun torchrun --standalone --nproc_per_node=4 scripts/train.py --batch-size 128 --seed 42 --time-steps 1000 --epochs 100 --loss-type "PACKET" --lr 1e-5 --level 4 --wavelet "sym5" --dataset "BEDROOM"

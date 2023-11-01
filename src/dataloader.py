@@ -115,21 +115,19 @@ def get_dataloaders(
             ),
         )
     elif "celebahq" in dataset_name.lower():
+        normalize = transforms.Normalize(
+            mean = [0.5169 , 0.4167 , 0.36327],
+            std = [0.29934, 0.27131, 0.26649]
+        )
         train_set = CelebAHQDataset(
             data_path,
             transform=transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                ]
+                [transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize]
             ),
         )
         val_set = CelebAHQDataset(
             data_path,
-            transform=transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                ]
-            ),
+            transform=transforms.Compose([transforms.ToTensor()]),
         )
     elif "cifar10" in dataset_name.lower():
         # TODO: Get these normalize values from the config file later
