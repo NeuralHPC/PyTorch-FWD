@@ -9,7 +9,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from config import celeba, cifar10
 from src.dataloader import get_dataloaders, get_distributed_dataloader
-from src.improved_UNet import Improv_UNet
+# from src.improved_UNet import Improv_UNet
+from diffusers import UNet2DModel
 from src.nn import get_loss_fn
 from src.trainer import Trainer
 from src.util import _get_global_rank, _get_local_rank, _parse_args
@@ -39,23 +40,25 @@ def instantiate_model(model_config: Dict[str, Any]) -> nn.Module:
     Returns:
         nn.Module: Instantiate the model.
     """
-    attn_res = []
-    for value in model_config["attn_res"]:
-        attn_res.append(model_config["input_size"] // int(value))
+    # attn_res = []
+    # for value in model_config["attn_res"]:
+    #     attn_res.append(model_config["input_size"] // int(value))
 
-    model = Improv_UNet(
-        in_channels=model_config["in_c"],
-        model_channels=model_config["model_c"],
-        out_channels=model_config["out_c"],
-        num_res_blocks=model_config["num_res_blocks"],
-        attention_resolutions=attn_res,
-        dropout=model_config["dropout"],
-        channel_mult=model_config["channel_mult"],
-        num_classes=model_config["num_classes"],
-        num_heads=model_config["num_heads"],
-        num_heads_upsample=model_config["num_heads_ups"],
-        use_scale_shift_norm=model_config["use_scale_shift_norm"],
-    )
+    # model = Improv_UNet(
+    #     in_channels=model_config["in_c"],
+    #     model_channels=model_config["model_c"],
+    #     out_channels=model_config["out_c"],
+    #     num_res_blocks=model_config["num_res_blocks"],
+    #     attention_resolutions=attn_res,
+    #     dropout=model_config["dropout"],
+    #     channel_mult=model_config["channel_mult"],
+    #     num_classes=model_config["num_classes"],
+    #     num_heads=model_config["num_heads"],
+    #     num_heads_upsample=model_config["num_heads_ups"],
+    #     use_scale_shift_norm=model_config["use_scale_shift_norm"],
+    # )
+    # return model
+    model = UNet2DModel.from_pretrained("google/ddpm-cifar10-32")
     return model
 
 

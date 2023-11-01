@@ -3,6 +3,8 @@ from typing import List, Tuple
 import torch
 import torch.nn as nn
 
+from tqdm import tqdm
+
 
 @torch.jit.script
 def linear_noise_scheduler(
@@ -120,11 +122,11 @@ def sample_DDPM(
     x_t_1 = x_t
     class_labels = class_labels.to(device)
 
-    for time in reversed(range(max_steps)):
+    for time in tqdm(reversed(range(max_steps)), total=max_steps):
         alpha_t, alpha, _ = linear_noise_scheduler(time, max_steps)
         z = torch.randn_like(x_t_1, device=device)
         time = torch.unsqueeze(torch.tensor(time, device=device), dim=-1)
-        denoise = model(x_t_1, time, class_labels)
+        denoise = model(x_t_1, time, return_dict=False)[0]
         x_mean = (x_t_1 - (denoise * ((1 - alpha) / ((1 - alpha_t) ** 0.5)))) / (
             alpha**0.5
         )

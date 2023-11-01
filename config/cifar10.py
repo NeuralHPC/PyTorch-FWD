@@ -7,11 +7,13 @@ class CIFAR10:
     def __init__(self) -> None:
         self.dataset_config: Dict[str, Any] = {
             "random_flip": True,
-            "num_workers": 48,  # Feel free to change this
+            "num_workers": 12,  # Feel free to change this
             "dataset": "CIFAR10",
             "resize": None,
-            "mean": [x / 255.0 for x in [125.3, 123.0, 113.9]],
-            "std": [x / 255.0 for x in [63.0, 62.1, 66.7]],
+#            "mean": [x / 255.0 for x in [125.3, 123.0, 113.9]],
+#            "std": [x / 255.0 for x in [63.0, 62.1, 66.7]],
+            "mean": [0.5, 0.5, 0.5],
+            "std": [0.5, 0.5, 0.5],
         }
 
         self.model_config: Dict[str, Any] = {

@@ -55,7 +55,7 @@ class Trainer:
                 if self.__global_rank == 0:
                     self.__load_checkpoint(args.model_path)
         self.model = DDP(
-            self.model, device_ids=[self.__local_rank], find_unused_parameters=True
+            self.model, device_ids=[self.__local_rank]#, find_unused_parameters=True
         )
 
         # Initialize training variables
@@ -126,9 +126,10 @@ class Trainer:
 
             # Forward pass and loss calculation
             self.__optimizer.zero_grad()
-            pred_noise = self.model(x, current_steps, class_label)
-            loss_val = self.__loss_fn(pred_noise, y)
+            pred_noise = self.model(x, current_steps, return_dict=False)#, class_label)
+            loss_val = self.__loss_fn(pred_noise[0], y)
 
+            torch.cuda.synchronize()
             # Backward pass
             loss_val.backward()
             if self.__clip_grad_norm > 0:
@@ -162,9 +163,10 @@ class Trainer:
                 print(f"Training loss: {epoch_loss}", flush=True)
                 self.__tensorboard.add_scalar("Train Loss", epoch_loss, epoch)
                 last_epoch = epoch == max_epochs - 1
-                if (epoch % 5 == 0) or last_epoch:
+                # if (epoch % 5 == 0) or last_epoch:
+                if (epoch >= 0) or last_epoch:
                     # Sample validation set
-                    sample_imgs, original_imgs = self.__validation_sample(32, dataloader)
+                    sample_imgs, original_imgs = self.__validation_sample(64, dataloader)
                     self.__tensorboard.add_images("Original images", original_imgs[:8, :, :, :], epoch)
                     self.__tensorboard.add_images("Sampled images", sample_imgs[:8, :, :, :], epoch)
                     # Compute fourier and wavelet power spectrum loss

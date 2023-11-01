@@ -100,13 +100,12 @@ def main():
     
     fft_vals, fft_vals_inv = fourier_power_divergence(sample_imgs, ref_imgs)
     print("wavelet level: ", int(level_dict[int(sample_imgs.shape[-2])]))
-    packet_vals, packet_vals_inv, fpd = wavelet_packet_power_divergence(sample_imgs, ref_imgs, level=int(level_dict[int(sample_imgs.shape[-2])]))
+    packet_vals, packet_vals_inv = wavelet_packet_power_divergence(sample_imgs, ref_imgs, level=int(level_dict[int(sample_imgs.shape[-2])]))
     fft_mean = 0.5*(fft_vals + fft_vals_inv)
     packet_mean = 0.5*(packet_vals + packet_vals_inv)
 
     print(f"PSKL FFT A->B: {round(fft_vals.item(),2)}, B->A: {round(fft_vals_inv.item(),2)}, Mean: {round(fft_mean.item(), 2)}")
     print(f"PSKL Packet A->B: {round(packet_vals.item(),2)}, B->A: {round(packet_vals_inv.item(),2)}, Mean: {round(packet_mean.item(), 2)}")
-    print(f"Frechet Packet Distance: {fpd}")
     
 
 if __name__ == '__main__':

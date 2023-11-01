@@ -75,12 +75,12 @@ def _parse_args():
     parser.add_argument(
         "--wavelet",
         type=str,
-        default="db2",
-        choices=["Haar", "db2"],
+        default="sym5",
+        choices=["Haar", "sym5"],
         help="Type of wavelet for packet loss computation.",
     )
     parser.add_argument(
-        "--max-level", type=int, default=3, help="Depth of wavelet decomposition."
+        "--max-level", type=int, default=2, help="Depth of wavelet decomposition."
     )
     parser.add_argument(
         "--loss-sigma", type=float, default=0.3, help="Weigting factor for mixed loss."

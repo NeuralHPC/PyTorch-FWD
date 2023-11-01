@@ -229,10 +229,10 @@ def wavelet_packet_power_divergence(
     output_packets = forward_wavelet_packet_transform(output, max_level=level, wavelet=wavelet)
     target_packets = forward_wavelet_packet_transform(target, max_level=level, wavelet=wavelet)
     
-    fpd = wavelet_packet_frechet_distance(
-        deepcopy(output_packets),
-        deepcopy(target_packets)
-        )
+    # fpd = wavelet_packet_frechet_distance(
+    #     deepcopy(output_packets),
+    #     deepcopy(target_packets)
+    #     )
 
     output_energy = torch.abs(output_packets) ** 2
     target_energy = torch.abs(target_packets) ** 2
@@ -255,7 +255,7 @@ def wavelet_packet_power_divergence(
     
     kld_AB = torch.sum(kld_AB, dim=-1)
     kld_BA = torch.sum(kld_BA, dim=-1)
-    return torch.mean(kld_AB), torch.mean(kld_BA), fpd
+    return torch.mean(kld_AB), torch.mean(kld_BA)
 
 
 def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarray, sigma2: np.ndarray, eps: float = 1e-12) -> np.ndarray:
