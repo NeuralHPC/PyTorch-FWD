@@ -96,7 +96,7 @@ def _parse_args():
         "--dataset",
         type=str,
         default="CIFAR10",
-        choices=["CIFAR10", "CELEBA64", "CELEBAHQ64", "CELEBAHQ128"],
+        choices=["CIFAR10", "CELEBA64", "CELEBAHQ64", "CELEBAHQ128", "CELEBAHQ256"],
         help="Select the dataset to diffuse",
     )
     return parser.parse_args()
