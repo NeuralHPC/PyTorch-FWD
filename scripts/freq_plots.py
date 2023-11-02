@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import torch
 from glob import glob
 from tqdm import tqdm
-from src.freq_math import forward_wavelet_packet_transform
+import ptwt
+import pywt
 import tikzplotlib as tikz
 from itertools import product
 
@@ -99,6 +100,20 @@ def get_images(path):
     return torch.from_numpy(imgs)
 
 
+def process(tensor: torch.Tensor, paths: list, wavelet: str, level: int, log_scale: bool = True) -> torch.Tensor:
+    packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=level)
+    packet_list = []
+    for node in paths:
+        for subnode in node:
+            packet = torch.squeeze(packets["".join(subnode)], dim=1)
+            packet_list.append(packet)
+    wp_pt = torch.stack(packet_list, dim=1)
+    if log_scale:
+        return torch.log(torch.abs(wp_pt) + 1e-12)
+    return wp_pt# / (torch.amax(torch.abs(wp_pt), dim=(0, 2, 3, 4), keepdim=True) + 1e-12)
+
+
+
 def main():
     global original_path, sample_path_wave, level, wvlt, sample_path_mse
     freq_path, natural_path = get_freq_order(level=level)
@@ -107,75 +122,89 @@ def main():
     original_tensor = get_images(original_path)
     original_tensor = original_tensor.permute(0, 3, 1, 2)
     original_tensor = original_tensor/255.
-    original_packets = forward_wavelet_packet_transform(original_tensor, wavelet=wvlt, max_level=level, log_scale=True)
+    original_packets = process(original_tensor, freq_path, wavelet=wvlt, level=level, log_scale=False)
     del original_tensor
     
     print("Loading and computing packets for Wavelet loss trained dataset")
     wave_tensor = get_images(sample_path_wave)
     wave_tensor = wave_tensor.permute(0, 3, 1, 2)
     wave_tensor = wave_tensor/255.
-    wave_packets = forward_wavelet_packet_transform(wave_tensor, wavelet=wvlt, max_level=level, log_scale=True)
+    wave_packets = process(wave_tensor, freq_path, wavelet=wvlt, level=level, log_scale=False)
     del wave_tensor
 
     print("Loading and computing packets for mse loss trained dataset")
     mse_tensor = get_images(sample_path_mse)
     mse_tensor = mse_tensor.permute(0, 3, 1, 2)
     mse_tensor = mse_tensor/255.
-    mse_packets = forward_wavelet_packet_transform(mse_tensor, wavelet=wvlt, max_level=level, log_scale=True)
+    mse_packets = process(mse_tensor, freq_path, wavelet=wvlt, level=level, log_scale=False)
     del mse_tensor
 
+    # original_packets = original_packets / (torch.amax(torch.abs(original_packets), dim=(0, 2, 3, 4))+1e-12)
+    # wave_packets = wave_packets / (torch.amax(torch.abs(wave_packets), dim=(0, 2, 3, 4))+1e-12)
+    # mean_packets = mean_packets / (torch.amax(torch.abs(mean_packets), dim=(0, 2, 3, 4))+1e-12)
     # Generate packets and mean packets
     mean_packets_original = torch.mean(original_packets, dim=(0, 2))
     mean_packets_wave = torch.mean(wave_packets, dim=(0, 2))
     mean_packets_mse = torch.mean(mse_packets, dim=(0, 2))
+
+    mean_a = mean_packets_original - mean_packets_mse
+    mean_b = mean_packets_original - mean_packets_wave
+    mean_a = torch.abs(mean_a*mean_a)
+    mean_b = torch.abs(mean_b**2)
+    
+    # mean_packets_mse = mean_packets_mse / torch.amax(torch.abs(mean_packets_mse), dim=(1, 2), keepdim=True)
+    # mean_packets_wave = mean_packets_wave / torch.amax(torch.abs(mean_packets_wave), dim=(1, 2), keepdim=True)
+    # mean_packets_original = mean_packets_original / torch.amax(torch.abs(mean_packets_original), dim=(1, 2), keepdim=True)
+
     # Generate plots - mean packet
     plot_real = generate_frequency_packet_image(mean_packets_original, level)
     plot_mse = generate_frequency_packet_image(mean_packets_mse, level)
     plot_wave = generate_frequency_packet_image(mean_packets_wave, level)
     fig = plt.figure(figsize=(9,3))
     fig.add_subplot(1, 3, 1)
-    plt.imshow(plot_real, vmax=1.5, vmin=-7)
+    plt.imshow(plot_real, vmax=1, vmin=-1)
     plt.title("real")
     plt.xticks([], [])
     plt.yticks([], [])
     plt.colorbar()
     fig.add_subplot(1, 3, 2)
-    plt.imshow(plot_mse, vmax=1.5, vmin=-7)
+    plt.imshow(plot_mse, vmax=1, vmin=-1)
     plt.title("MSE")
     plt.xticks([], [])
     plt.yticks([], [])
     plt.colorbar()
     fig.add_subplot(1, 3, 3)
-    plt.imshow(plot_wave, vmax=1.5, vmin=-7)
+    plt.imshow(plot_wave, vmax=1, vmin=-1)
     plt.title("Wavelet")
     plt.xticks([], [])
     plt.yticks([], [])
     plt.colorbar()
-    # plt.savefig(f'./packet_plots/mean_packets_{wvlt}_all.png', dpi=600, bbox_inches='tight')
-    # plt.close()
+    plt.show()
+    # # plt.savefig(f'./packet_plots/mean_packets_{wvlt}_all.png', dpi=600, bbox_inches='tight')
+    # # plt.close()
     
-    # # Tikzplot save
-    fig = plt.gcf()
-    tikz.save('./freq_plots/mean_packet_representation.tex', standalone=True)
-    plt.savefig('./freq_plots/mean_packet_representation.pdf', bbox_inches='tight')
+    # # # Tikzplot save
+    # fig = plt.gcf()
+    # tikz.save('./freq_plots/mean_packet_representation.tex', standalone=True)
+    # plt.savefig('./freq_plots/mean_packet_representation.pdf', bbox_inches='tight')
 
-    plt.close()
+    # plt.close()
 
     # Generate mean packets magnitude plots
-    plt.plot(torch.mean(mean_packets_original, (-2, -1)).flatten().numpy(), label='real')
-    plt.plot(torch.mean(mean_packets_mse, (-2, -1)).flatten().numpy(), label='mse')
-    plt.plot(torch.mean(mean_packets_wave, (-2, -1)).flatten().numpy(), label='packet')
+    plt.semilogy(torch.mean(mean_a, (-2, -1)).flatten().numpy(), label='real-mse')
+    plt.semilogy(torch.mean(mean_b, (-2, -1)).flatten().numpy(), label='real-wave')
+    # plt.plot(torch.mean(mean_packets_wave, (-2, -1)).flatten().numpy(), label='packet')
     plt.xlabel('mean packets')
     plt.ylabel('magnitude')
     plt.grid()
     plt.legend()
-    plt.gcf()
-    fig = plt.gcf()
-    fig = tikzplotlib_fix_ncols(fig)
-    tikz.save('./freq_plots/mean_packet_magnitude.tex', standalone=True)
-    plt.savefig('./freq_plots/mean_packet_magnitude.pdf', bbox_inches='tight')
-    # plt.savefig(f'./packet_plots/packet_magnitude_{wvlt}_all.png', dpi=600, bbox_inches='tight')
-    plt.close()
+    # fig = plt.gcf()
+    # fig = tikzplotlib_fix_ncols(fig)
+    # tikz.save('./freq_plots/mean_packet_magnitude.tex', standalone=True)
+    # plt.savefig('./freq_plots/mean_packet_magnitude.pdf', bbox_inches='tight')
+    # # plt.savefig(f'./packet_plots/packet_magnitude_{wvlt}_all.png', dpi=600, bbox_inches='tight')
+    # plt.close()
+    plt.show()
 
 if __name__ == '__main__':
     main()
