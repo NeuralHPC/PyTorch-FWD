@@ -169,3 +169,6 @@ sample_imgs*/
 *.npz
 *.png
 logs/
+*curated*
+*.pdf
+*.tex

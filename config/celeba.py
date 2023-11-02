@@ -386,7 +386,7 @@ class CELEBAHQ256:
             "num_heads": 4,
             "num_heads_ups": 4,
             "use_scale_shift_norm": True,
-            "input_size": 128,
+            "input_size": 256,
         }
 
         self.optimizer_config: Dict[str, Any] = {

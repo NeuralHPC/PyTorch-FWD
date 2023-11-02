@@ -3,10 +3,9 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import torch
 from glob import glob
-import os
-import ptwt
-import pywt
+from tqdm import tqdm
 from src.freq_math import forward_wavelet_packet_transform
+import tikzplotlib as tikz
 from itertools import product
 
 
@@ -14,7 +13,17 @@ original_path = glob('../cifar_data/cifar10_train/*.jpg')
 sample_path_wave = glob('./sample_imgs_DDPM_CIFAR10_PACKET_2023-10-31_19-28-42-304774_seed_42/sample_imgs_torch/*.jpg')
 sample_path_mse = glob('/home/lveerama/results/metrics_sampled_images/cifar10/DDPM/sample_imgs_torch/*.jpg')
 level = 2
-wvlt = 'sym4'
+wvlt = 'Haar'
+
+
+def tikzplotlib_fix_ncols(obj):
+    """
+    workaround for matplotlib 3.6 renamed legend's _ncol to _ncols, which breaks tikzplotlib
+    """
+    if hasattr(obj, "_ncols"):
+        obj._ncol = obj._ncols
+    for child in obj.get_children():
+        tikzplotlib_fix_ncols(child)
 
 
 def get_freq_order(level: int):
@@ -84,7 +93,7 @@ def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
 
 def get_images(path):
     imgs = []
-    for img in path:
+    for img in tqdm(path):
         imgs.append(np.array(Image.open(img).convert('RGB')))
     imgs = np.stack(imgs, axis=0)
     return torch.from_numpy(imgs)
@@ -142,19 +151,30 @@ def main():
     plt.xticks([], [])
     plt.yticks([], [])
     plt.colorbar()
-    plt.savefig(f'./packet_plots/mean_packets_{wvlt}_all.png', dpi=600, bbox_inches='tight')
+    # plt.savefig(f'./packet_plots/mean_packets_{wvlt}_all.png', dpi=600, bbox_inches='tight')
     # plt.close()
+    
+    # # Tikzplot save
+    fig = plt.gcf()
+    tikz.save('./freq_plots/mean_packet_representation.tex', standalone=True)
+    plt.savefig('./freq_plots/mean_packet_representation.pdf', bbox_inches='tight')
+
     plt.close()
 
-    # Generate mean packets
+    # Generate mean packets magnitude plots
     plt.plot(torch.mean(mean_packets_original, (-2, -1)).flatten().numpy(), label='real')
     plt.plot(torch.mean(mean_packets_mse, (-2, -1)).flatten().numpy(), label='mse')
-    plt.plot(torch.mean(mean_packets_wave, (-2, -1)).flatten().numpy(), linestyle='dashed', label='packet')
+    plt.plot(torch.mean(mean_packets_wave, (-2, -1)).flatten().numpy(), label='packet')
     plt.xlabel('mean packets')
     plt.ylabel('magnitude')
     plt.grid()
     plt.legend()
-    plt.savefig(f'./packet_plots/packet_magnitude_{wvlt}_all.png', dpi=600, bbox_inches='tight')
+    plt.gcf()
+    fig = plt.gcf()
+    fig = tikzplotlib_fix_ncols(fig)
+    tikz.save('./freq_plots/mean_packet_magnitude.tex', standalone=True)
+    plt.savefig('./freq_plots/mean_packet_magnitude.pdf', bbox_inches='tight')
+    # plt.savefig(f'./packet_plots/packet_magnitude_{wvlt}_all.png', dpi=600, bbox_inches='tight')
     plt.close()
 
 if __name__ == '__main__':

@@ -114,7 +114,7 @@ def main():
         )
 
     # Dataloading
-    train_set, val_set = get_dataloaders(
+    train_set, _ = get_dataloaders(
         dataset_name=args.dataset,
         batch_size=args.batch_size,
         val_size=20,
@@ -128,13 +128,13 @@ def main():
         batch_size=args.batch_size,
         num_workers=config.dataset_config["num_workers"],
     )
-    val_loader, _ = get_distributed_dataloader(
-        dataset=val_set,
-        world_size=dist.get_world_size(),
-        global_seed=args.seed,
-        batch_size=args.batch_size,
-        num_workers=config.dataset_config["num_workers"],
-    )
+    # val_loader, _ = get_distributed_dataloader(
+    #     dataset=val_set,
+    #     world_size=dist.get_world_size(),
+    #     global_seed=args.seed,
+    #     batch_size=args.batch_size,
+    #     num_workers=config.dataset_config["num_workers"],
+    # )
 
     # model utils intialization
     weights = None

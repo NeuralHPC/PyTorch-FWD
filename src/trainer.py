@@ -166,7 +166,7 @@ class Trainer:
                 # if (epoch % 5 == 0) or last_epoch:
                 if (epoch >= 0) or last_epoch:
                     # Sample validation set
-                    sample_imgs, original_imgs = self.__validation_sample(64, dataloader)
+                    sample_imgs, original_imgs = self.__validation_sample(16, dataloader)
                     self.__tensorboard.add_images("Original images", original_imgs[:8, :, :, :], epoch)
                     self.__tensorboard.add_images("Sampled images", sample_imgs[:8, :, :, :], epoch)
                     # Compute fourier and wavelet power spectrum loss
@@ -193,7 +193,10 @@ class Trainer:
         with torch.no_grad():
             self.model.eval()
             imgs, labels = next(iter(dataloader))
-            imgs, labels = imgs[:bs, :, :, :], labels[:bs]
+            if len(imgs) > bs:
+                imgs, labels = imgs[:bs, :, :, :], labels[:bs]
+            else:
+                bs = len(imgs)
             imgs = imgs.to(self.__local_rank)
 
             x_0 = sample_DDPM(
@@ -207,6 +210,8 @@ class Trainer:
             if self.__std.nelement() != 0  and self.__mean.nelement() != 0:
                 x_0 = (x_0 * self.__std) + self.__mean
                 imgs = (imgs * self.__std) + self.__mean
+            print(x_0.shape)
+            print(imgs.shape)
             assert x_0.shape == imgs.shape, "generated images must be same shape as input."
             return x_0, imgs
 
