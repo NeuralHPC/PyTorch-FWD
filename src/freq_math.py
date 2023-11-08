@@ -224,7 +224,7 @@ def wavelet_packet_power_divergence(
         torch.Tensor: Wavelet power divergence metric
     """
     assert output.shape == target.shape, "Sampled and reference images should have same shape."
-    print(f"Using wavelet: {wavelet} with level: {level}")
+    # print(f"Using wavelet: {wavelet} with level: {level}")
 
     output_packets = forward_wavelet_packet_transform(output, max_level=level, wavelet=wavelet)
     target_packets = forward_wavelet_packet_transform(target, max_level=level, wavelet=wavelet)
