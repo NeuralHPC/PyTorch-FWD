@@ -1,3 +1,4 @@
+import pickle
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -8,6 +9,8 @@ import ptwt
 import pywt
 import tikzplotlib as tikz
 from itertools import product
+from functools import partial
+from concurrent.futures import ThreadPoolExecutor as Pool
 
 
 original_path = glob('../cifar_data/cifar10_train/*.jpg')
@@ -92,11 +95,21 @@ def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
         image.append(np.concatenate(row, -1))
     return np.concatenate(image, 0)
 
-def get_images(path):
+
+def get_image(image_path):
+    try:
+        return np.array(Image.open(image_path).convert('RGB'))
+    except Exception as e:
+        print(f"error: {e}, path: {image_path}")
+        return None
+
+
+def get_images(paths):
     imgs = []
-    for img in tqdm(path):
-        imgs.append(np.array(Image.open(img).convert('RGB')))
-    imgs = np.stack(imgs, axis=0)
+    with Pool(10) as p:
+        imgs = p.map(get_image, paths)
+    # imgs = list(map(get_image, path))
+    imgs = np.stack(list(filter(lambda i: i is not None, imgs)))
     return torch.from_numpy(imgs)
 
 
@@ -104,17 +117,158 @@ def process(tensor: torch.Tensor, paths: list, wavelet: str, level: int, log_sca
     packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=level)
     packet_list = []
     for node in paths:
-        for subnode in node:
-            packet = torch.squeeze(packets["".join(subnode)], dim=1)
-            packet_list.append(packet)
+        packet = torch.squeeze(packets["".join(node)], dim=1)
+        packet_list.append(packet)
     wp_pt = torch.stack(packet_list, dim=1)
     if log_scale:
         return torch.log(torch.abs(wp_pt) + 1e-12)
-    return wp_pt# / (torch.amax(torch.abs(wp_pt), dim=(0, 2, 3, 4), keepdim=True) + 1e-12)
+    return wp_pt
 
 
 
-def main():
+def compute_power_spectrum(input_tensor):
+    square =  input_tensor**2
+    return square / np.sum(square**2, axis=(1, 3, 4), keepdims=True)
+
+
+def plot_freq_celebA():
+    to_plot = []
+    level = 4
+    wavelet = 'sym5'
+    nested_freq_path, natural_path = get_freq_order(level=level)
+    freq_path = []
+    for freq in nested_freq_path:
+        freq_path.extend(freq)
+
+    original_images = glob("/p/scratch/holistic-vid-westai/veeramacheneni2_scratch/CelebAMask-HQ/data256x256/*.jpg")
+    ddpm_images = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/DDPM/sample_imgs_torch/*.jpg")
+    ddim_images = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/DDIM/sample_imgs_torch/*.jpg")
+    styleswin_images = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/StyleSwin/celeba_256/samples/eval_0/*.png")
+    wavediff = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/WaveDiff/celeba_256/*.jpg")
+    ddgan = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/DDGAN/celeba_256/*.jpg")
+    stylegan2 = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/StyleGAN2/samples_celeba/*.png")
+
+    def compute_packets(file_list, batch_size = 1000, wavelet=wavelet):
+        my_process = partial(process, paths=natural_path, wavelet=wavelet, level=level, log_scale=False)
+
+        image_tensor = get_images(file_list).permute(0, 3, 1, 2)/255.
+        print(f'image_tensor shape {image_tensor.shape}')
+        packets = []
+        tensor_list = torch.split(image_tensor, batch_size)
+        for tensor in tqdm(tensor_list):
+            packets_el = my_process(tensor.cuda())
+            packets.append(packets_el.cpu())
+        packets = torch.cat(packets, 0)
+        return packets
+
+    original_packets = compute_packets(original_images)
+    packet_image = np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(original_packets.numpy()), axis=(0, 2)), 4) + 1e-24)
+    plt.imshow(packet_image)
+    plt.savefig(f'orig_packets_{wavelet}.pdf')
+    plt.clf()
+    mean_power_celeba = np.mean(compute_power_spectrum(original_packets.numpy()), axis=(0, 2, 3, 4))
+    print('gt packets done.')
+
+    styleswin_packets = compute_packets(styleswin_images)
+    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(styleswin_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
+    plt.savefig(f'styleswin_packets_{wavelet}.pdf')
+    plt.clf()
+    mean_power_styleswin = np.mean(compute_power_spectrum(styleswin_packets.numpy()), axis=(0, 2, 3, 4))
+    print('styleswin packets done.')
+
+    ddpm_packets = compute_packets(ddpm_images)
+    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(ddpm_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
+    plt.savefig(f'ddpm_packets_{wavelet}.pdf')
+    plt.clf()
+    mean_power_ddpm = np.mean(compute_power_spectrum(ddpm_packets.numpy()), axis=(0, 2, 3, 4))
+    print('ddpm packets done.')
+
+    
+    ddim_packets = compute_packets(ddim_images)
+    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(ddim_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
+    plt.savefig(f'ddim_packets_{wavelet}.pdf')
+    plt.clf()
+    mean_power_ddim = np.mean(compute_power_spectrum(ddim_packets.numpy()), axis=(0, 2, 3, 4))
+    print('ddim packets done.')
+    del ddim_packets
+
+    wave_diff_packets = compute_packets(wavediff)
+    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(wave_diff_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
+    plt.savefig(f'wave_diff_packets_{wavelet}.pdf')
+    plt.clf()
+    mean_power_wavediff = np.mean(compute_power_spectrum(wave_diff_packets.numpy()), axis=(0, 2, 3, 4))
+    del wave_diff_packets
+    print('wave_diff_packets done.')
+
+    ddgan_packets = compute_packets(ddgan)
+    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(ddgan_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
+    plt.savefig(f'ddgan_packets_{wavelet}.pdf')
+    plt.clf()
+
+    mean_power_ddgan = np.mean(compute_power_spectrum(ddgan_packets.numpy()), axis=(0, 2, 3, 4))
+    del ddgan_packets
+
+    print('ddgan_packets done.')
+
+    stylegan2_packets = compute_packets(stylegan2)
+    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(stylegan2_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
+    plt.savefig(f'stylegan2_packets_{wavelet}.pdf')
+    plt.clf()
+    mean_power_stylegan2 = np.mean(compute_power_spectrum(stylegan2_packets.numpy()), axis=(0, 2, 3, 4))
+    del stylegan2_packets
+    print('stylegan2_packets done.')
+
+
+    plt.clf()
+    plt.semilogy(mean_power_celeba, label='celebAHQ')
+    plt.semilogy(mean_power_ddpm, '.-', label='DDPM')
+    plt.semilogy(mean_power_ddim, '.-', label='DDIM')
+    plt.semilogy(mean_power_styleswin, '.-', label='Styleswin')
+    plt.semilogy(mean_power_wavediff, '.-', label='wavediff')
+    plt.semilogy(mean_power_ddgan, '.-', label='ddgan')
+    plt.semilogy(mean_power_stylegan2, '.-', label='stylegan2')
+    plt.legend()
+    plt.savefig(f'packetplot_{wavelet}.pdf');
+
+    diff = lambda mpower: np.abs(mean_power_celeba - mpower)
+
+    plt.clf()
+    plt.semilogy(diff(mean_power_ddpm), '.-', label='DDPM')
+    plt.semilogy(diff(mean_power_ddim), '.-', label='DDIM')
+    plt.semilogy(diff(mean_power_styleswin), '.-', label='Styleswin')
+    plt.semilogy(diff(mean_power_wavediff), '.-', label='wavediff')
+    plt.semilogy(diff(mean_power_ddgan), '.-', label='ddgan')
+    plt.semilogy(diff(mean_power_stylegan2), '.-', label='stylegan2')
+    
+    plt.legend()
+    plt.savefig(f'diff_packetplot_{wavelet}.pdf');
+
+    breakpoint()
+
+    plt.semilogy(mean_power_celeba, label='celebAHQ')
+    plt.semilogy(mean_power_ddpm, '.-', label='DDPM')
+    plt.semilogy(mean_power_stylegan2, '.-', label='stylegan2')
+    tikz.save(f'packetplot_celebAHQ_DDPM__stylegan2_{wavelet}.tex', standalone=True)
+    plt.savefig(f'packetplot_celebAHQ_DDPM__stylegan2_{wavelet}.pdf');
+    
+
+    plt.imshow(generate_frequency_packet_image(np.abs(compute_power_spectrum(original_packets.numpy()))
+               - generate_frequency_packet_image(compute_power_spectrum(ddpm_packets.numpy()))))
+    plt.savefig(f'diff_packetimage_{wavelet}'.pdf)
+
+    print('done')
+
+
+    breakpoint()
+
+    # with open('picklepickle.pkl', 'wb') as f:
+    #     pickle.dump([original_packets.numpy(),
+    #                  ddpm_packets.numpy(),
+    #                  ddim_packets.numpy(),
+    #                  styleswin_packets.numpy()], f)
+
+
+def main_tuned():
     global original_path, sample_path_wave, level, wvlt, sample_path_mse
     freq_path, natural_path = get_freq_order(level=level)
     # Read and preprocess image
@@ -207,7 +361,7 @@ def main():
     plt.show()
 
 if __name__ == '__main__':
-    main()
+    plot_freq_celebA()
     # img_nms = glob('./packet_plots/packet_*.png')
     # nms = []
     # imgs = []
