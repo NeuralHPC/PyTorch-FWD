@@ -185,6 +185,8 @@ def fourier_power_divergence(
     
     b, c, _, _  = output_fft.shape
     
+    output_fft = output_fft.swapaxes(0, 1)
+    target_fft = target_fft.swapaxes(0, 1)
     output_power = torch.reshape(output_fft, (c, -1))
     target_power = torch.reshape(target_fft, (c, -1))
     output_power = output_power / torch.sum(output_power, dim=-1, keepdim=True)
@@ -237,12 +239,16 @@ def wavelet_packet_power_divergence(
     output_energy = torch.abs(output_packets) ** 2
     target_energy = torch.abs(target_packets) ** 2
 
-    b, p, c, _, _ = output_packets.shape
-    output_energy = output_energy.reshape((p, c, -1))
-    target_energy = target_energy.reshape((p, c, -1))
-    
-    output_power = output_energy / torch.sum(output_energy, dim=-1, keepdim=True)
-    target_power = target_energy / torch.sum(target_energy, dim=-1, keepdim=True)
+    b, p, c, h, w = output_packets.shape
+    # reshape into p, c, b, h, w
+    output_energy_p = output_energy.permute([1, 2, 0, 3, 4])
+    target_energy_p = target_energy.permute([1, 2, 0, 3, 4])
+    output_energy_r = output_energy_p.reshape((p, c, -1))
+    target_energy_r = target_energy_p.reshape((p, c, -1))
+
+
+    output_power = output_energy_r / torch.sum(output_energy_r, dim=-1, keepdim=True)
+    target_power = target_energy_r / torch.sum(target_energy_r, dim=-1, keepdim=True)
     del output_energy
     del target_energy
     del output_packets
