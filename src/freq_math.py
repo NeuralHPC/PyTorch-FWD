@@ -264,8 +264,10 @@ def wavelet_packet_power_divergence(
     return torch.mean(kld_AB), torch.mean(kld_BA)
 
 
-def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarray, sigma2: np.ndarray, eps: float = 1e-12) -> np.ndarray:
-    """Numpy implementation of the Frechet Distance.
+def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
+    """Implementation from https://github.com/mseitzer/pytorch-fid.
+
+    Numpy implementation of the Frechet Distance.
     The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
     and X_2 ~ N(mu_2, C_2) is
             d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
@@ -285,6 +287,7 @@ def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarra
     Returns:
     --   : The Frechet Distance.
     """
+
     mu1 = np.atleast_1d(mu1)
     mu2 = np.atleast_1d(mu2)
 
@@ -298,77 +301,42 @@ def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarra
 
     diff = mu1 - mu2
 
-    prod = sigma1.dot(sigma2)
-    l, v = np.linalg.eigh(prod)
-    covmean = v @ np.diag(np.emath.sqrt(l)) @ v.T
+    # Product might be almost singular
+    covmean = linalg.sqrtm(sigma1.dot(sigma2))
+    if not np.isfinite(covmean).all():
+        msg = ('fid calculation produces singular product; '
+               'adding %s to diagonal of cov estimates') % eps
+        print(msg)
+        offset = np.eye(sigma1.shape[0]) * eps
+        covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
 
-    tr_covmean = np.absolute(np.trace(covmean))
+    # Numerical error might give slight imaginary component
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError('Imaginary component {}'.format(m))
+        covmean = covmean.real
+
+    tr_covmean = np.trace(covmean)
 
     return (diff.dot(diff) + np.trace(sigma1)
             + np.trace(sigma2) - 2 * tr_covmean)
 
+
 def wavelet_packet_frechet_distance(
-        output_packets: torch.Tensor, target_packets: torch.Tensor
-) -> np.ndarray:
-    """Compute the frechet packet distance.
+        output: torch.Tensor, target: torch.Tensor, level: int = 4, wavelet: str = "sym5"
+) -> float:
+    """Compute wavelet packet Frechet distance.
 
     Args:
-        output_packets (torch.Tensor): The network output packets
-        target_packets (torch.Tensor): The target image packets
+        output (torch.Tensor): Generated images of shape [B, C, H, W].
+        target (torch.Tensor): Ground truth images. Same shape as output.
+        level (int, optional): Wavelet decomposition level. Defaults to 4.
+        wavelet (str, optional): Wavelet type to use. Defaults to "sym5".
 
     Returns:
-        np.ndarray: Frechet packet distance
+        float: Wavelet packet Frechet distance. 
     """
-    assert output_packets.shape == target_packets.shape, "Sampled and reference packets should have same shape."
-
-    b, p, c, h, w = output_packets.shape
-    output_energy = np.reshape(np.absolute(output_packets.numpy()) ** 2, (b*p*c, h*w))
-    del output_packets
-    target_energy = np.reshape(np.absolute(target_packets.numpy()) ** 2, (b*p*c, h*w))
-    del target_packets
-
-    mu1 = np.mean(output_energy, axis=0)
-    sigma1 = np.cov(output_energy, rowvar=False)
-
-    mu2 = np.mean(target_energy, axis=0)
-    sigma2 = np.cov(target_energy, rowvar=False)
-
-    fpd = compute_frechet_distance(
-        mu1=mu1, mu2=mu2,
-        sigma1=sigma1, sigma2=sigma2
-    )
-    return fpd
-
-
-def fourier_frechet_distance(
-        output: torch.Tensor, target: torch.Tensor
-) -> np.ndarray:
-    """Compute frechet frequency distance.
-
-    Args:
-        output (torch.Tensor): The network output
-        target (torch.Tensor): The target image
-
-    Returns:
-        np.ndarray: Frechet frequency distance
-    """
-    assert output.shape == target.shape, "Sampled and reference images should have same shape."
-
-    output_fft = torch.abs(torch.fft.fft2(output)) ** 2
-    target_fft = torch.abs(torch.fft.fft2(target)) ** 2
-    
-    b, c, h, w = output_fft.shape
-    output_fft = np.reshape(output_fft.numpy(), (b*c, h*w))
-    target_fft = np.reshape(target_fft.numpy(), (b*c, h*w))
-
-    mu1 = np.mean(output_fft, axis=0)
-    sigma1 = np.cov(output_fft, rowvar=False)
-
-    mu2 = np.mean(target_fft, axis=0)
-    sigma2 = np.cov(target_fft, rowvar=False)
-
-    ffd = compute_frechet_distance(
-        mu1=mu1, mu2=mu2,
-        sigma1=sigma1, sigma2=sigma2
-    )
-    return ffd
+    # Step 1: Compute Wavelet Packet Transform
+    # Step 2: Compute Frechet distance for each packet
+    # Step 3:
