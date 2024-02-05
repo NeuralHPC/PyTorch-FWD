@@ -335,9 +335,36 @@ def wavelet_packet_frechet_distance(
         wavelet (str, optional): Wavelet type to use. Defaults to "sym5".
 
     Returns:
-        float: Wavelet packet Frechet distance. 
+        float: Wavelet packet Frechet distance.
     """
-    # Step 1: Compute Wavelet Packet Transform
-    # Step 2: Compute Frechet distance for each packet
-    # Step 3: Compute average packet Frechet distance
-    pass
+    assert output.shape == target.shape, "Output and target must be of same shape."
+    # Compute wavelet packet transform.
+    output_packets = forward_wavelet_packet_transform(tensor=output,
+                                                      wavelet=wavelet,
+                                                      max_level=level)
+    target_packets = forward_wavelet_packet_transform(tensor=target,
+                                                      wavelet=wavelet,
+                                                      max_level=level)
+
+    assert output_packets.shape == target_packets.shape, "Output & target packets are not of same shape."
+
+    # Permute patches and batch dimensions
+    output_packets = torch.permute(output_packets, (1, 0, 2, 3, 4))
+    target_packets = torch.permute(target_packets, (1, 0, 2, 3, 4))
+    PACKETS, BATCH, CHANNELS, HEIGHT, WIDTH = output_packets.shape
+
+    # Flatten each packet in batch into vector
+    output_reshaped = torch.reshape(output_packets, (PACKETS, BATCH, CHANNELS*HEIGHT*WIDTH))
+    target_reshaped = torch.reshape(target_packets, (PACKETS, BATCH, CHANNELS*HEIGHT*WIDTH))
+
+    # Compute mean and covariance for each packet
+
+    # Compute Frechet distance for each packet
+
+    # Compute average Frechet distance
+    return None
+
+
+if __name__ == "__main__":
+    tensor_ = torch.randn((100, 3, 256, 256))
+    distance = wavelet_packet_frechet_distance(tensor_, tensor_, level=4)
