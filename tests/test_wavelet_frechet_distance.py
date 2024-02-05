@@ -57,7 +57,7 @@ def test_shuffle_input():
 
 
 @pytest.mark.parametrize("wavelet", ["sym5", "db5", "Haar"])
-@pytest.mark.parametrize("level", [2, 3])
+@pytest.mark.parametrize("level", [2, 3, 4])
 def test_various_wavelet(wavelet, level):
     target_images = get_images()
     output_images = deepcopy(target_images)
