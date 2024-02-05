@@ -339,4 +339,5 @@ def wavelet_packet_frechet_distance(
     """
     # Step 1: Compute Wavelet Packet Transform
     # Step 2: Compute Frechet distance for each packet
-    # Step 3:
+    # Step 3: Compute average packet Frechet distance
+    pass
