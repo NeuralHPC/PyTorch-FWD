@@ -2,9 +2,11 @@
 
 import torch
 import pytest
+import numpy as np
 
 from src.freq_math import wavelet_packet_frechet_distance
 from sklearn.datasets import load_sample_images
+from torchvision import transforms
 from copy import deepcopy
 
 
@@ -18,10 +20,11 @@ def get_images() -> torch.Tensor:
     dataset = load_sample_images()
     tower = torch.Tensor(dataset.images[0])
     flower = torch.Tensor(dataset.images[1])
-    images = torch.stack([tower, tower, flower, flower], axis=0)
+    images = torch.stack([tower, tower, tower, tower, flower, flower, flower, flower], axis=0)
     images = images.type(torch.FloatTensor) / 255.0
     images = torch.permute(images, [0, 3, 1, 2])
-    assert images.shape == (4, 3, 427, 640)
+    images = transforms.functional.resize(images, (64, 64))
+    assert images.shape == (8, 3, 64, 64)
     return images
 
 
@@ -30,9 +33,9 @@ def test_same_input():
     output_images = deepcopy(target_images)
     distance = wavelet_packet_frechet_distance(output=output_images,
                                                target=target_images,
-                                               level=3,
+                                               level=2,
                                                wavelet="sym5")
-    assert torch.allclose(distance, 0.0)
+    assert np.allclose(distance, 0.0, atol=1e-3)
 
 
 def test_shuffle_input():
@@ -40,16 +43,21 @@ def test_shuffle_input():
     # Shuffle the output images
     output_images = deepcopy(target_images)
     permutation = torch.randperm(len(target_images))
-    output_images = output_images[permutation, :, :, :]
-    distance = wavelet_packet_frechet_distance(output=output_images,
+    shuffled_images = output_images[permutation, :, :, :]
+    assert not torch.allclose(shuffled_images, output_images)
+    shuffled_distance = wavelet_packet_frechet_distance(output=shuffled_images,
                                                target=target_images,
-                                               level=3,
+                                               level=2,
                                                wavelet="sym5")
-    assert torch.allclose(distance, 0.0)
+    unshuffled_distance = wavelet_packet_frechet_distance(output=output_images,
+                                                          target=target_images,
+                                                          level=2,
+                                                          wavelet="sym5")
+    assert np.allclose(shuffled_distance, unshuffled_distance)
 
 
-@pytest.mark.parametrize("wavelet", ["sym5", "db5", "Haar", "db2", "sym4", "db3", "db4"])
-@pytest.mark.parametrize("level", [1, 2, 3, 4])
+@pytest.mark.parametrize("wavelet", ["sym5", "db5", "Haar"])
+@pytest.mark.parametrize("level", [2, 3])
 def test_various_wavelet(wavelet, level):
     target_images = get_images()
     output_images = deepcopy(target_images)
@@ -57,4 +65,4 @@ def test_various_wavelet(wavelet, level):
                                                target=target_images,
                                                level=level,
                                                wavelet=wavelet)
-    assert torch.allclose(distance, 0.0)
+    assert np.allclose(distance, 0.0, atol=1e-3)

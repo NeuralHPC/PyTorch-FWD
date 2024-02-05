@@ -7,6 +7,7 @@ import pywt
 import torch
 import torch.nn.functional as F
 from copy import deepcopy
+from tqdm import tqdm
 
 from scipy import linalg
 
@@ -345,7 +346,6 @@ def wavelet_packet_frechet_distance(
     target_packets = forward_wavelet_packet_transform(tensor=target,
                                                       wavelet=wavelet,
                                                       max_level=level)
-
     assert output_packets.shape == target_packets.shape, "Output & target packets are not of same shape."
 
     # Permute patches and batch dimensions
@@ -357,14 +357,21 @@ def wavelet_packet_frechet_distance(
     output_reshaped = torch.reshape(output_packets, (PACKETS, BATCH, CHANNELS*HEIGHT*WIDTH))
     target_reshaped = torch.reshape(target_packets, (PACKETS, BATCH, CHANNELS*HEIGHT*WIDTH))
 
-    # Compute mean and covariance for each packet
+    output_array = output_reshaped.detach().cpu().numpy()
+    target_array = target_reshaped.detach().cpu().numpy()
 
-    # Compute Frechet distance for each packet
+    output_means = [np.mean(output_array[packet_no, :, :], axis=0) for packet_no in range(PACKETS)]
+    target_means = [np.mean(target_array[packet_no, :, :], axis=0) for packet_no in range(PACKETS)]
 
-    # Compute average Frechet distance
-    return None
+    output_covs = [np.cov(output_array[packet_no, :, :], rowvar=False) for packet_no in range(PACKETS)]
+    target_covs = [np.cov(target_array[packet_no, :, :], rowvar=False) for packet_no in range(PACKETS)]
 
-
-if __name__ == "__main__":
-    tensor_ = torch.randn((100, 3, 256, 256))
-    distance = wavelet_packet_frechet_distance(tensor_, tensor_, level=4)
+    print("Computing per packet FID...")
+    frechet_distances = []
+    for packet_no in tqdm(range(PACKETS)):
+        frechet_distance = calculate_frechet_distance(mu1=output_means[packet_no],
+                                                      mu2=target_means[packet_no],
+                                                      sigma1=output_covs[packet_no],
+                                                      sigma2=target_covs[packet_no])
+        frechet_distances.append(frechet_distance)
+    return np.mean(frechet_distances)
