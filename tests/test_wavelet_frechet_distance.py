@@ -10,12 +10,15 @@ from torchvision import transforms
 from copy import deepcopy
 
 
-def get_images() -> torch.Tensor:
-    """
-    Generate sample images for testing.
+def get_images(img_size: int = 64) -> torch.Tensor:
+    """Generate images of given size.
+
+    Args:
+        img_size (int): Integer specifying the desired image size.
 
     Returns:
-        torch.Tensor: Tensor of shape (batch_size, channels, height, width).
+        torch.Tensor: Tensor containing images of shape [batchsize, channels, height, width].
+
     """
     dataset = load_sample_images()
     tower = torch.Tensor(dataset.images[0])
@@ -23,8 +26,8 @@ def get_images() -> torch.Tensor:
     images = torch.stack([tower, tower, tower, tower, flower, flower, flower, flower], axis=0)
     images = images.type(torch.FloatTensor) / 255.0
     images = torch.permute(images, [0, 3, 1, 2])
-    images = transforms.functional.resize(images, (64, 64))
-    assert images.shape == (8, 3, 64, 64)
+    images = transforms.functional.resize(images, (img_size, img_size))
+    assert images.shape == (8, 3, img_size, img_size)
     return images
 
 
@@ -46,9 +49,9 @@ def test_shuffle_input():
     shuffled_images = output_images[permutation, :, :, :]
     assert not torch.allclose(shuffled_images, output_images)
     shuffled_distance = wavelet_packet_frechet_distance(output=shuffled_images,
-                                               target=target_images,
-                                               level=2,
-                                               wavelet="sym5")
+                                                        target=target_images,
+                                                        level=2,
+                                                        wavelet="sym5")
     unshuffled_distance = wavelet_packet_frechet_distance(output=output_images,
                                                           target=target_images,
                                                           level=2,

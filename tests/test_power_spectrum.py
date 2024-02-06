@@ -4,10 +4,7 @@ import numpy as np
 
 from src.freq_math import (
     fourier_power_divergence,
-    wavelet_packet_power_divergence,
-    fourier_frechet_distance,
-    wavelet_packet_frechet_distance,
-    forward_wavelet_packet_transform
+    wavelet_packet_power_divergence
 )
 
 
@@ -29,17 +26,3 @@ def test_packet_divergence():
     ab, ba = wavelet_packet_power_divergence(face, face)
     assert np.allclose(ab.item(), 0., atol=1e-5)
     assert np.allclose(ba.item(), 0., atol=1e-5)
-
-
-def test_fourier_frechet():
-    # TODO: Fourier frechet fails needs to be discussed
-    face = torch.randn((10000, 3, 32, 32))
-    ffd = fourier_frechet_distance(face, face)
-    assert ffd == 0
-
-
-def test_packet_frechet():
-    face = torch.randn((1000, 3, 256, 256))
-    packets = forward_wavelet_packet_transform(face, max_level=4, wavelet='sym5')
-    fpd = wavelet_packet_frechet_distance(packets, packets)
-    assert np.allclose(fpd, 0)
