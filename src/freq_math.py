@@ -104,6 +104,34 @@ def forward_wavelet_packet_transform(
     return wp_pt_rs
 
 
+def batched_packet_transform(
+        tensor: torch.Tensor,
+        wavelet: str = "sym5",
+        max_level: int = 4,
+        log_scale: bool = False,
+        batch_size: int = 2500
+) -> torch.Tensor:
+    """Compute wavelet packet transform over batches.
+
+    Args:
+        tensor (torch.Tensor): Input tensor of shape [BS, CHANNELS, HEIGHT, WIDTH]
+        wavelet (str): Choice of wavelet
+        max_level (int): Maximum decomposition level
+        log_scale (bool): Whether to apply log scale
+        batch_size (int): Batch size for tensor split
+
+    Returns:
+        torch.Tensor: Tensor containing packets of shape [BS, PACKETS, CHANNELS, HEIGHT, WIDTH]
+
+    """
+    assert len(tensor.shape) == 4, "Input tensor for packet transforms must have 4 dimensions"
+    batched_tensor = tensor.split(2500, dim=0)
+    packets = []
+    for image_batch in tqdm(batched_tensor):
+        packets.append(forward_wavelet_packet_transform(image_batch, wavelet, max_level, log_scale))
+    return torch.cat(packets, dim=0)
+
+
 def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
     """Create a ready-to-polt image with frequency-order packages.
        Given a packet array in natural order, creat an image which is
@@ -229,8 +257,8 @@ def wavelet_packet_power_divergence(
     assert output.shape == target.shape, "Sampled and reference images should have same shape."
     # print(f"Using wavelet: {wavelet} with level: {level}")
 
-    output_packets = forward_wavelet_packet_transform(output, max_level=level, wavelet=wavelet)
-    target_packets = forward_wavelet_packet_transform(target, max_level=level, wavelet=wavelet)
+    output_packets = batched_packet_transform(output, max_level=level, wavelet=wavelet)
+    target_packets = batched_packet_transform(target, max_level=level, wavelet=wavelet)
     
     # fpd = wavelet_packet_frechet_distance(
     #     deepcopy(output_packets),
@@ -340,12 +368,12 @@ def wavelet_packet_frechet_distance(
     """
     assert output.shape == target.shape, "Output and target must be of same shape."
     # Compute wavelet packet transform.
-    output_packets = forward_wavelet_packet_transform(tensor=output,
-                                                      wavelet=wavelet,
-                                                      max_level=level)
-    target_packets = forward_wavelet_packet_transform(tensor=target,
-                                                      wavelet=wavelet,
-                                                      max_level=level)
+    output_packets = batched_packet_transform(tensor=output,
+                                              wavelet=wavelet,
+                                              max_level=level)
+    target_packets = batched_packet_transform(tensor=target,
+                                              wavelet=wavelet,
+                                              max_level=level)
     assert output_packets.shape == target_packets.shape, "Output & target packets are not of same shape."
 
     # Permute patches and batch dimensions

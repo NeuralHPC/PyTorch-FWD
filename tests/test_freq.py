@@ -6,7 +6,9 @@ from src.freq_math import (
     generate_frequency_packet_image,
     forward_wavelet_packet_transform,
     inverse_wavelet_packet_transform,
+    batched_packet_transform,
 )
+from .test_wavelet_frechet_distance import get_images
 
 
 def test_loss():
@@ -37,3 +39,12 @@ def test_inverse_wp():
         packets, max_level=3, wavelet="db3"
     )
     assert torch.max(torch.abs(reconstruction[:, :, :768, :1024] - face)) < 1e-5
+
+
+def test_batched_packet_transform():
+    images = get_images(256)
+    permutation = torch.randperm(len(images))
+    images = images[permutation, :, :, :]
+    bacthed_packets = batched_packet_transform(tensor=images, wavelet="sym5", max_level=4, batch_size=2)
+    packets = forward_wavelet_packet_transform(tensor=images, wavelet="sym5", max_level=4)
+    assert torch.allclose(bacthed_packets, packets)
