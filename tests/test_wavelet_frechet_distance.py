@@ -69,3 +69,16 @@ def test_various_wavelet(wavelet, level):
                                                level=level,
                                                wavelet=wavelet)
     assert np.allclose(distance, 0.0, atol=1e-3)
+
+
+@pytest.mark.parametrize("img_size", [(32, 1), (64, 2), (128, 3), (256, 4)])
+def test_various_image_sizes(img_size):
+    size, level = img_size
+    target_images = get_images(size)
+    output_images = deepcopy(target_images)
+    assert output_images.shape == (8, 3, size, size)
+    distance = wavelet_packet_frechet_distance(output=output_images,
+                                               target=target_images,
+                                               level=level,
+                                               wavelet="sym5")
+    assert np.allclose(distance, 0.0, atol=1e-3)
