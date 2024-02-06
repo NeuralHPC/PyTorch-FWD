@@ -5,7 +5,7 @@ import numpy as np
 from typing import Tuple
 
 from scripts.fid.inception import InceptionV3
-from scripts.fid.fid import calculate_frechet_distance
+from src.freq_math import calculate_frechet_distance
 from .test_wavelet_frechet_distance import get_images
 from copy import deepcopy
 from torch.nn.functional import adaptive_avg_pool2d
