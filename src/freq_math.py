@@ -90,7 +90,8 @@ def forward_wavelet_packet_transform(
     max_level: int = 3,
     log_scale: bool = False,
 ) -> torch.Tensor:
-    tensor = tensor.type(torch.FloatTensor)
+    # ideally the output dtype should depend in the input.
+    # tensor = tensor.type(torch.FloatTensor)
     packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=max_level)
     packet_list = []
 
