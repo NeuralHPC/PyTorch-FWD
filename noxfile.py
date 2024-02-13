@@ -48,3 +48,11 @@ def mypy(session):
         "--allow-untyped-calls",
         "src",
     )
+
+
+@nox.session(name="test")
+def test(session):
+    session.install("-r", "requirements.txt")
+    session.chdir("tests")
+    session.run("pytest")
+    
