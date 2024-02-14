@@ -3,6 +3,7 @@
 import torch
 import pytest
 import numpy as np
+import numpy.matlib
 
 from src.freq_math import wavelet_packet_frechet_distance
 from sklearn.datasets import load_sample_images
@@ -82,3 +83,52 @@ def test_various_image_sizes(img_size_level):
                                                level=level,
                                                wavelet="sym5")
     assert np.allclose(distance, 0.0, atol=1e-3)
+
+
+def test_checkerboard():
+    import scipy.ndimage
+
+    range_max = 100 
+    # tile_size = 10 # determines tile size
+    images = []
+
+    for tile_size in [2, 6, 10]:
+    # generate random grid
+    
+        grid = np.meshgrid(np.arange(0,range_max), np.arange(0,range_max))
+        # grid = grid[0] + grid[1]
+
+        tile_fun = lambda cord: (cord % tile_size) < (tile_size // 2)
+
+        x_tile = tile_fun(grid[0])
+        y_tile = tile_fun(grid[1])
+        grid = 1 - (x_tile + y_tile)
+
+        grid = grid.astype(np.float32)
+
+        # generate 10 images via a random fft-shift
+        img_list = []
+        for _ in range(10):
+            input_ = numpy.fft.fft2(grid)
+            shift = np.random.uniform(-1, 1)*tile_size//2
+            image = scipy.ndimage.fourier_shift(input_, shift=shift)
+            image = numpy.fft.ifft2(image)
+            img_list.append(image.real)
+        # B, H, W
+        img_array = np.stack(img_list, axis=0)
+        # B, C, H, W
+        img_array = np.stack([img_array]*3, 1)
+        images.append(img_array)
+
+    # a list for the wavelet frecet distances.
+    wfd_list = []
+    reference = images[0]
+    for cimgs in images[1:]:
+        wfd_list.append(wavelet_packet_frechet_distance(output=torch.from_numpy(cimgs),
+                                                        target=torch.from_numpy(reference),
+                                                        level=3,
+                                                        wavelet="sym5"))
+
+
+
+    assert wfd_list[0] > wfd_list[1] 

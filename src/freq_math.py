@@ -126,7 +126,7 @@ def batched_packet_transform(
 
     """
     assert len(tensor.shape) == 4, "Input tensor for packet transforms must have 4 dimensions"
-    batched_tensor = tensor.split(2500, dim=0)
+    batched_tensor = tensor.split(split_size=batch_size, dim=0)
     packets = []
     for image_batch in tqdm(batched_tensor):
         packets.append(forward_wavelet_packet_transform(image_batch, wavelet, max_level, log_scale))
