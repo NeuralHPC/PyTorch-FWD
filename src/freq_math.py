@@ -260,29 +260,34 @@ def wavelet_packet_power_divergence(
 
     output_packets = batched_packet_transform(output, max_level=level, wavelet=wavelet)
     target_packets = batched_packet_transform(target, max_level=level, wavelet=wavelet)
-    
-    # fpd = wavelet_packet_frechet_distance(
-    #     deepcopy(output_packets),
-    #     deepcopy(target_packets)
-    #     )
 
+    # Normalize per pixel across batches resulting in per pixel distribution
+    output_packets = output_packets / (torch.sum(output_packets, dim=0, keepdim=True) + 1e-12)
+    target_packets = target_packets / (torch.sum(target_packets, dim=0, keepdim=True) + 1e-12)
+    
     output_energy = torch.abs(output_packets) ** 2
     target_energy = torch.abs(target_packets) ** 2
 
     b, p, c, h, w = output_packets.shape
+    del output_packets
+    del target_packets
     # reshape into p, c, b, h, w
     output_energy_p = output_energy.permute([1, 2, 0, 3, 4])
     target_energy_p = target_energy.permute([1, 2, 0, 3, 4])
+    del output_energy
+    del target_energy
+
     output_energy_r = output_energy_p.reshape((p, c, -1))
     target_energy_r = target_energy_p.reshape((p, c, -1))
+    del output_energy_p
+    del target_energy_p
 
 
     output_power = output_energy_r / torch.sum(output_energy_r, dim=-1, keepdim=True)
     target_power = target_energy_r / torch.sum(target_energy_r, dim=-1, keepdim=True)
-    del output_energy
-    del target_energy
-    del output_packets
-    del target_packets
+    del output_energy_r
+    del target_energy_r
+
 
     kld_AB = compute_kl_divergence(output_power, target_power)
     kld_BA = compute_kl_divergence(target_power, output_power)
