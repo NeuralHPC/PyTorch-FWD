@@ -5,6 +5,7 @@ import pytest
 import numpy as np
 import numpy.matlib
 
+from itertools import pairwise
 from src.freq_math import wavelet_packet_frechet_distance
 from sklearn.datasets import load_sample_images
 from torchvision import transforms
@@ -117,7 +118,8 @@ def test_checkerboard():
         # B, H, W
         img_array = np.stack(img_list, axis=0)
         # B, C, H, W
-        img_array = np.stack([img_array]*3, 1)
+        img_array = np.expand_dims(img_array, 1)
+        # img_array = np.stack([img_array]*3, 1)
         images.append(img_array)
 
     # a list for the wavelet frecet distances.
@@ -129,6 +131,4 @@ def test_checkerboard():
                                                         level=3,
                                                         wavelet="sym5"))
 
-
-
-    assert wfd_list[0] > wfd_list[1] 
+    assert all(a < b for a, b in pairwise(wfd_list))

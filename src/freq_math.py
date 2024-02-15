@@ -93,11 +93,11 @@ def forward_wavelet_packet_transform(
     # ideally the output dtype should depend in the input.
     # tensor = tensor.type(torch.FloatTensor)
     packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=max_level)
-    packet_list = []
+    packet_list = [packets[node] for node in packets.get_natural_order(max_level)]
 
-    for node in packets.get_natural_order(max_level):
-        packet = torch.squeeze(packets[node], dim=1)
-        packet_list.append(packet)
+    # for node in packets.get_natural_order(max_level):
+        # packet = torch.squeeze(packets[node], dim=1)
+        # packet_list.append(packets[node])
     wp_pt_rs = torch.stack(packet_list, axis=1)
     if log_scale:
         wp_pt_rs = torch.log(torch.abs(wp_pt_rs) + 1e-12)
