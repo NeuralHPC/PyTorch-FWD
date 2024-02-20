@@ -191,6 +191,16 @@ def inverse_wavelet_packet_transform(
 
 
 def compute_kl_divergence(output: torch.Tensor, target: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
+    """Compute KL Divergence
+
+    Args:
+        output (torch.Tensor): Output Images
+        target (torch.Tensor): Target Images
+        eps (float, optional): Epsilon. Defaults to 1e-12.
+
+    Returns:
+        torch.Tensor: KL Divergence value
+    """
     # Tried with eps 1e-30 and this improves the precision by a small margin but overall ranking remains the same
     return target * torch.log(((target) / (output + eps)) + eps)
 
@@ -256,47 +266,33 @@ def wavelet_packet_power_divergence(
         torch.Tensor: Wavelet power divergence metric
     """
     assert output.shape == target.shape, "Sampled and reference images should have same shape."
-    # print(f"Using wavelet: {wavelet} with level: {level}")
-
+    
     output_packets = batched_packet_transform(output, max_level=level, wavelet=wavelet)
     target_packets = batched_packet_transform(target, max_level=level, wavelet=wavelet)
 
-    # Normalize per pixel across batches resulting in per pixel distribution
-    output_packets = output_packets / (torch.sum(output_packets, dim=0, keepdim=True) + 1e-12)
-    target_packets = target_packets / (torch.sum(target_packets, dim=0, keepdim=True) + 1e-12)
-    
-    output_energy = torch.abs(output_packets) ** 2
-    target_energy = torch.abs(target_packets) ** 2
+    B, P, C, H, W = output_packets.shape
+    output_packets = torch.reshape(output_packets, (B, P, C, H*W))
+    output_packets = torch.permute(output_packets, [1, 2, 3, 0])
+    target_packets = torch.reshape(target_packets, (B, P, C, H*W))
+    target_packets = torch.permute(target_packets, [1, 2, 3, 0])
 
-    b, p, c, h, w = output_packets.shape
-    del output_packets
-    del target_packets
-    # reshape into p, c, b, h, w
-    output_energy_p = output_energy.permute([1, 2, 0, 3, 4])
-    target_energy_p = target_energy.permute([1, 2, 0, 3, 4])
-    del output_energy
-    del target_energy
+    P, C, Px, B = output_packets.shape
+    output_packets = torch.reshape(output_packets, (P*C, Px, B))
+    target_packets = torch.reshape(target_packets, (P*C, Px, B))
+    assert output_packets.shape == target_packets.shape, "Reshape shapes are not same."
 
-    output_energy_r = output_energy_p.reshape((p, c, -1))
-    target_energy_r = target_energy_p.reshape((p, c, -1))
-    del output_energy_p
-    del target_energy_p
-
-
-    output_power = output_energy_r / torch.sum(output_energy_r, dim=-1, keepdim=True)
-    target_power = target_energy_r / torch.sum(target_energy_r, dim=-1, keepdim=True)
-    del output_energy_r
-    del target_energy_r
-
-
-    kld_AB = compute_kl_divergence(output_power, target_power)
-    kld_BA = compute_kl_divergence(target_power, output_power)
-    del output_power
-    del target_power
-    
-    kld_AB = torch.sum(kld_AB, dim=-1)
-    kld_BA = torch.sum(kld_BA, dim=-1)
-    return torch.mean(kld_AB), torch.mean(kld_BA)
+    kldiv_packet_channels = []
+    for pc_index in range(P*C):
+        kldiv_pc = []
+        for pix_index in range(Px):
+            output_hist, _ = torch.histogram(output_packets[pc_index, pix_index, :], bins=int(B**0.5))
+            target_hist, _ = torch.histogram(target_packets[pc_index, pix_index, :], bins=int(B**0.5))
+            kld_ab = compute_kl_divergence(output_hist, target_hist)
+            kld_ba = compute_kl_divergence(target_hist, output_hist)
+            kld = 0.5 * (kld_ab + kld_ba)
+            kldiv_pc.append(kld.detach().cpu().numpy())
+        kldiv_packet_channels.append(np.mean(kldiv_pc)) # Average kldivergence across pixels for all packet-channels
+    return np.mean(kldiv_packet_channels) # Average kldivergence across packets and channels
 
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
