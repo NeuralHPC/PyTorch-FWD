@@ -55,4 +55,12 @@ def test(session):
     session.install("-r", "requirements.txt")
     session.chdir("tests")
     session.run("pytest")
-    
+
+
+
+@nox.session(name="fast-test")
+def run_test_fast(session):
+    """Run pytest."""
+    session.install("-r", "requirements.txt")
+    session.install("pytest")
+    session.run("pytest", "-m", "not slow")

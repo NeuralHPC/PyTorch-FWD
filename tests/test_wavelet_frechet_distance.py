@@ -1,5 +1,5 @@
 """Test Wavelet packet Frechet distance."""
-
+import pytest
 import torch
 import pytest
 import numpy as np
@@ -9,7 +9,7 @@ from sklearn.datasets import load_sample_images
 from torchvision import transforms
 from copy import deepcopy
 
-
+@pytest.mark.slow
 def get_images(img_size: int = 64) -> torch.Tensor:
     """Generate images of given size.
 
@@ -31,6 +31,7 @@ def get_images(img_size: int = 64) -> torch.Tensor:
     return images
 
 
+@pytest.mark.slow
 def test_same_input():
     target_images = get_images()
     output_images = deepcopy(target_images)
@@ -41,6 +42,7 @@ def test_same_input():
     assert np.allclose(distance, 0.0, atol=1e-3)
 
 
+@pytest.mark.slow
 def test_shuffle_input():
     target_images = get_images()
     # Shuffle the output images
@@ -58,7 +60,7 @@ def test_shuffle_input():
                                                           wavelet="sym5")
     assert np.allclose(shuffled_distance, unshuffled_distance)
 
-
+@pytest.mark.slow
 @pytest.mark.parametrize("wavelet", ["sym5", "db5", "Haar"])
 @pytest.mark.parametrize("level", [2, 3, 4])
 def test_various_wavelets(wavelet, level):
@@ -71,6 +73,7 @@ def test_various_wavelets(wavelet, level):
     assert np.allclose(distance, 0.0, atol=1e-3)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("img_size_level", [(32, 1), (64, 2), (128, 3)]) #  (256, 4)
 def test_various_image_sizes(img_size_level):
     size, level = img_size_level

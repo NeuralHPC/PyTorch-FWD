@@ -1,5 +1,6 @@
 from itertools import product
 from typing import Tuple
+from functools import partial
 
 import numpy as np
 import ptwt
@@ -217,6 +218,8 @@ def fourier_power_divergence(
 
     Returns:
         (torch.Tensor): A scalar metric.
+
+    TODO:REMOVE
     """
     assert output.shape == target.shape, "Sampled and reference images should have same shape."
     
@@ -272,27 +275,45 @@ def wavelet_packet_power_divergence(
 
     B, P, C, H, W = output_packets.shape
     output_packets = torch.reshape(output_packets, (B, P, C, H*W))
-    output_packets = torch.permute(output_packets, [1, 2, 3, 0])
     target_packets = torch.reshape(target_packets, (B, P, C, H*W))
-    target_packets = torch.permute(target_packets, [1, 2, 3, 0])
 
-    P, C, Px, B = output_packets.shape
-    output_packets = torch.reshape(output_packets, (P*C, Px, B))
-    target_packets = torch.reshape(target_packets, (P*C, Px, B))
+    B, P, C, Px = output_packets.shape
+    #o utput_packets = torch.reshape(output_packets, (P*C, Px, B))
+    # target_packets = torch.reshape(target_packets, (P*C, Px, B))
     assert output_packets.shape == target_packets.shape, "Reshape shapes are not same."
 
-    kldiv_packet_channels = []
-    for pc_index in range(P*C):
-        kldiv_pc = []
-        for pix_index in range(Px):
-            output_hist, _ = torch.histogram(output_packets[pc_index, pix_index, :], bins=int(B**0.5))
-            target_hist, _ = torch.histogram(target_packets[pc_index, pix_index, :], bins=int(B**0.5))
-            kld_ab = compute_kl_divergence(output_hist, target_hist)
-            kld_ba = compute_kl_divergence(target_hist, output_hist)
-            kld = 0.5 * (kld_ab + kld_ba)
-            kldiv_pc.append(kld.detach().cpu().numpy())
-        kldiv_packet_channels.append(np.mean(kldiv_pc)) # Average kldivergence across pixels for all packet-channels
-    return np.mean(kldiv_packet_channels) # Average kldivergence across packets and channels
+    p_tar_hists = []
+    p_out_hists = []
+    for pindex in range(P):
+        c_tar_hists = []
+        c_out_hists = []
+        for cindex in range(C):
+            pix_out_hists = []
+            pix_tar_hists = []
+            for pix_index in range(Px):
+                output_hist, _ = torch.histogram(output_packets[:, pindex, cindex, pix_index], bins=int(B**0.5))
+                target_hist, _ = torch.histogram(target_packets[:, pindex, cindex, pix_index], bins=int(B**0.5))
+                pix_out_hists.append(output_hist)
+                pix_tar_hists.append(target_hist)
+            c_out_hists.append(torch.stack(pix_out_hists))
+            c_tar_hists.append(torch.stack(pix_tar_hists))
+        p_tar_hists.append(torch.stack(c_tar_hists))
+        p_out_hists.append(torch.stack(c_out_hists))
+            
+    output_hist = torch.stack(p_out_hists)
+    target_hist = torch.stack(p_tar_hists)
+
+    output_hist = output_hist.flatten()
+    target_hist = target_hist.flatten()
+
+    output_hist = output_hist / torch.sum(output_hist)
+    target_hist = target_hist / torch.sum(target_hist)
+
+
+    kld_ab = compute_kl_divergence(output_hist, target_hist)
+    kld_ba = compute_kl_divergence(target_hist, output_hist)
+    kld = 0.5 * (kld_ab + kld_ba)
+    return kld # Average kldivergence across packets and channels
 
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
