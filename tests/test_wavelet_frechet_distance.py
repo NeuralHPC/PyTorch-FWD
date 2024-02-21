@@ -89,7 +89,7 @@ def test_various_image_sizes(img_size_level):
     assert np.allclose(distance, 0.0, atol=1e-3)
 
 
-def test_checkerboard():
+def test_checkerboard_FWD():
     import scipy.ndimage
 
     range_max = 100 

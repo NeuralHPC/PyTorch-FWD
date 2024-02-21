@@ -313,7 +313,7 @@ def wavelet_packet_power_divergence(
     kld_ab = compute_kl_divergence(output_hist, target_hist)
     kld_ba = compute_kl_divergence(target_hist, output_hist)
     kld = 0.5 * (kld_ab + kld_ba)
-    return kld # Average kldivergence across packets and channels
+    return torch.mean(kld).item() # Average kldivergence across packets and channels
 
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
