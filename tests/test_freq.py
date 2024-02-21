@@ -1,4 +1,4 @@
-
+import pytest
 import scipy
 import torch
 
@@ -10,7 +10,7 @@ from src.freq_math import (
 )
 from .test_wavelet_frechet_distance import get_images
 
-
+@pytest.mark.slow
 def test_loss():
     import scipy.datasets
     import matplotlib.pyplot as plt

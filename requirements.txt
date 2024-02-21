@@ -1,9 +1,7 @@
-datasets
 pillow
 matplotlib
-multiprocess
 torch
-scipy
+scipy==1.11.1
 numpy
 scikit-learn
 torchvision
