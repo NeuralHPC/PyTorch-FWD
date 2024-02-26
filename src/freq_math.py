@@ -7,6 +7,7 @@ import ptwt
 import pywt
 import torch
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 from copy import deepcopy
 from tqdm import tqdm
 
@@ -191,7 +192,7 @@ def inverse_wavelet_packet_transform(
     return rec
 
 
-def compute_kl_divergence(output: torch.Tensor, target: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
+def compute_kl_divergence(output: torch.Tensor, target: torch.Tensor, eps: float = 1e-30) -> torch.Tensor:
     """Compute KL Divergence
 
     Args:
@@ -203,7 +204,7 @@ def compute_kl_divergence(output: torch.Tensor, target: torch.Tensor, eps: float
         torch.Tensor: KL Divergence value
     """
     # Tried with eps 1e-30 and this improves the precision by a small margin but overall ranking remains the same
-    return target * torch.log(((target) / (output + eps)) + eps)
+    return target * torch.log((target / (output + eps)) + eps)
 
 
 def fourier_power_divergence(
@@ -278,8 +279,6 @@ def wavelet_packet_power_divergence(
     target_packets = torch.reshape(target_packets, (B, P, C, H*W))
 
     B, P, C, Px = output_packets.shape
-    #o utput_packets = torch.reshape(output_packets, (P*C, Px, B))
-    # target_packets = torch.reshape(target_packets, (P*C, Px, B))
     assert output_packets.shape == target_packets.shape, "Reshape shapes are not same."
 
     p_tar_hists = []
@@ -288,27 +287,18 @@ def wavelet_packet_power_divergence(
         c_tar_hists = []
         c_out_hists = []
         for cindex in range(C):
-            pix_out_hists = []
-            pix_tar_hists = []
-            for pix_index in range(Px):
-                output_hist, _ = torch.histogram(output_packets[:, pindex, cindex, pix_index], bins=int(B**0.5))
-                target_hist, _ = torch.histogram(target_packets[:, pindex, cindex, pix_index], bins=int(B**0.5))
-                pix_out_hists.append(output_hist)
-                pix_tar_hists.append(target_hist)
-            c_out_hists.append(torch.stack(pix_out_hists))
-            c_tar_hists.append(torch.stack(pix_tar_hists))
+            output_hist, _ = torch.histogram(output_packets[:, pindex, cindex, :].flatten(), bins=int((B*Px)**0.5))
+            target_hist, _ = torch.histogram(target_packets[:, pindex, cindex, :].flatten(), bins=int((B*Px)**0.5))
+            c_tar_hists.append(target_hist)
+            c_out_hists.append(output_hist)
         p_tar_hists.append(torch.stack(c_tar_hists))
         p_out_hists.append(torch.stack(c_out_hists))
             
     output_hist = torch.stack(p_out_hists)
     target_hist = torch.stack(p_tar_hists)
 
-    output_hist = output_hist.flatten()
-    target_hist = target_hist.flatten()
-
-    output_hist = output_hist / torch.sum(output_hist)
-    target_hist = target_hist / torch.sum(target_hist)
-
+    output_hist = torch.nn.functional.softmax(output_hist)
+    target_hist = torch.nn.functional.softmax(target_hist)
 
     kld_ab = compute_kl_divergence(output_hist, target_hist)
     kld_ba = compute_kl_divergence(target_hist, output_hist)

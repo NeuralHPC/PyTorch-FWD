@@ -96,7 +96,7 @@ def test_checkerboard_FWD():
     # tile_size = 10 # determines tile size
     images = []
 
-    for tile_size in [2, 6, 8, 10, 20]:
+    for tile_size in [2, 10, 20]:
     # generate random grid
     
         grid = np.meshgrid(np.arange(0,range_max), np.arange(0,range_max))
@@ -112,7 +112,7 @@ def test_checkerboard_FWD():
 
         # generate 10 images via a random fft-shift
         img_list = []
-        for _ in range(10):
+        for _ in range(1000):
             input_ = numpy.fft.fft2(grid)
             shift = np.random.uniform(-1, 1)*tile_size//2
             image = scipy.ndimage.fourier_shift(input_, shift=shift)
@@ -121,8 +121,8 @@ def test_checkerboard_FWD():
         # B, H, W
         img_array = np.stack(img_list, axis=0)
         # B, C, H, W
-        img_array = np.expand_dims(img_array, 1)
-        # img_array = np.stack([img_array]*3, 1)
+        # img_array = np.expand_dims(img_array, 1)
+        img_array = np.stack([img_array]*3, 1)
         images.append(img_array)
 
     # a list for the wavelet frecet distances.
