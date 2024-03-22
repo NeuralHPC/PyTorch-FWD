@@ -88,9 +88,9 @@ def unfold_channels(
 
 def forward_wavelet_packet_transform(
     tensor: torch.Tensor,
-    wavelet: str = "db3",
-    max_level: int = 3,
-    log_scale: bool = False,
+    wavelet: str,
+    max_level: int,
+    log_scale: bool,
 ) -> torch.Tensor:
     # ideally the output dtype should depend in the input.
     # tensor = tensor.type(torch.FloatTensor)
@@ -102,17 +102,17 @@ def forward_wavelet_packet_transform(
         # packet_list.append(packets[node])
     wp_pt_rs = torch.stack(packet_list, axis=1)
     if log_scale:
-        wp_pt_rs = torch.log(torch.abs(wp_pt_rs) + 1e-12)
+        wp_pt_rs = torch.log(torch.abs(wp_pt_rs) + 1e-6)
 
     return wp_pt_rs
 
 
 def batched_packet_transform(
         tensor: torch.Tensor,
-        wavelet: str = "sym5",
-        max_level: int = 4,
-        log_scale: bool = False,
-        batch_size: int = 2500
+        wavelet: str,
+        max_level: int,
+        log_scale: bool,
+        batch_size: int
 ) -> torch.Tensor:
     """Compute wavelet packet transform over batches.
 
@@ -130,7 +130,7 @@ def batched_packet_transform(
     assert len(tensor.shape) == 4, "Input tensor for packet transforms must have 4 dimensions"
     batched_tensor = tensor.split(split_size=batch_size, dim=0)
     packets = []
-    for image_batch in tqdm(batched_tensor):
+    for image_batch in batched_tensor:
         packets.append(forward_wavelet_packet_transform(image_batch, wavelet, max_level, log_scale))
     return torch.cat(packets, dim=0)
 
@@ -246,8 +246,7 @@ def fourier_power_divergence(
 
 
 def wavelet_packet_power_divergence(
-    output: torch.Tensor, target: torch.Tensor, level: int = 3, wavelet: str = 'sym5'
-) -> torch.Tensor:
+    output: torch.Tensor, target: torch.Tensor, level: int, wavelet: str, log_scale: bool) -> torch.Tensor:
     """Compute the wavelet packet power divergence.
 
     Daubechies wavelets are orthogonal, see Ripples in Mathematics page 129:
@@ -271,8 +270,8 @@ def wavelet_packet_power_divergence(
     """
     assert output.shape == target.shape, "Sampled and reference images should have same shape."
     
-    output_packets = batched_packet_transform(output, max_level=level, wavelet=wavelet)
-    target_packets = batched_packet_transform(target, max_level=level, wavelet=wavelet)
+    output_packets = batched_packet_transform(output, max_level=level, wavelet=wavelet, log_scale=log_scale, batch_size=2500)
+    target_packets = batched_packet_transform(target, max_level=level, wavelet=wavelet, log_scale=log_scale, batch_size=2500)
 
     B, P, C, H, W = output_packets.shape
     output_packets = torch.reshape(output_packets, (B, P, C, H*W))
@@ -287,8 +286,14 @@ def wavelet_packet_power_divergence(
         c_tar_hists = []
         c_out_hists = []
         for cindex in range(C):
-            output_hist, _ = torch.histogram(output_packets[:, pindex, cindex, :].flatten(), bins=int((B*Px)**0.5))
-            target_hist, _ = torch.histogram(target_packets[:, pindex, cindex, :].flatten(), bins=int((B*Px)**0.5))
+            op_pack = output_packets[:, pindex, cindex, :].flatten()
+            tg_pack = target_packets[:, pindex, cindex, :].flatten()
+            max_val = torch.max(torch.max(torch.abs(op_pack)), torch.max(torch.abs(tg_pack)))
+            max_val = 1e-12 if max_val == 0 else max_val
+            op_pack = op_pack / max_val
+            tg_pack = tg_pack / max_val
+            output_hist, _ = torch.histogram(op_pack, bins=int((B*Px)**0.5), range=(-1, 1))
+            target_hist, _ = torch.histogram(tg_pack, bins=int((B*Px)**0.5), range=(-1, 1))
             c_tar_hists.append(target_hist)
             c_out_hists.append(output_hist)
         p_tar_hists.append(torch.stack(c_tar_hists))
@@ -297,8 +302,10 @@ def wavelet_packet_power_divergence(
     output_hist = torch.stack(p_out_hists)
     target_hist = torch.stack(p_tar_hists)
 
-    output_hist = torch.nn.functional.softmax(output_hist)
-    target_hist = torch.nn.functional.softmax(target_hist)
+    # output_hist = torch.nn.functional.softmax(output_hist)
+    # target_hist = torch.nn.functional.softmax(target_hist)
+    output_hist = output_hist / (torch.sum(output_hist, dim=-1, keepdim=True) + 1e-12)
+    target_hist = target_hist / (torch.sum(target_hist, dim=-1, keepdim=True) + 1e-12)
 
     kld_ab = compute_kl_divergence(output_hist, target_hist)
     kld_ba = compute_kl_divergence(target_hist, output_hist)
@@ -366,7 +373,7 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
 
 def wavelet_packet_frechet_distance(
-        output: torch.Tensor, target: torch.Tensor, level: int = 4, wavelet: str = "sym5"
+        output: torch.Tensor, target: torch.Tensor, level: int, wavelet: str, log_scale: bool
 ) -> float:
     """Compute wavelet packet Frechet distance.
 
@@ -383,10 +390,14 @@ def wavelet_packet_frechet_distance(
     # Compute wavelet packet transform.
     output_packets = batched_packet_transform(tensor=output,
                                               wavelet=wavelet,
-                                              max_level=level)
+                                              max_level=level,
+                                              log_scale=log_scale,
+                                              batch_size=2500)
     target_packets = batched_packet_transform(tensor=target,
                                               wavelet=wavelet,
-                                              max_level=level)
+                                              max_level=level,
+                                              log_scale=log_scale,
+                                              batch_size=2500)
     assert output_packets.shape == target_packets.shape, "Output & target packets are not of same shape."
 
     # Permute patches and batch dimensions
@@ -407,9 +418,10 @@ def wavelet_packet_frechet_distance(
     output_covs = [np.cov(output_array[packet_no, :, :], rowvar=False) for packet_no in range(PACKETS)]
     target_covs = [np.cov(target_array[packet_no, :, :], rowvar=False) for packet_no in range(PACKETS)]
 
-    print("Computing per packet FID...")
+    # print("Computing per packet FID...")
     frechet_distances = []
-    for packet_no in tqdm(range(PACKETS)):
+    # for packet_no in tqdm(range(PACKETS)):
+    for packet_no in range(PACKETS):
         frechet_distance = calculate_frechet_distance(mu1=output_means[packet_no],
                                                       mu2=target_means[packet_no],
                                                       sigma1=output_covs[packet_no],
