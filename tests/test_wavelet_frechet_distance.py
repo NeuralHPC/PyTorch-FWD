@@ -40,7 +40,8 @@ def test_same_input():
     distance = wavelet_packet_frechet_distance(output=output_images,
                                                target=target_images,
                                                level=2,
-                                               wavelet="sym5")
+                                               wavelet="sym5",
+                                               log_scale=False)
     assert np.allclose(distance, 0.0, atol=1e-3)
 
 
@@ -55,12 +56,15 @@ def test_shuffle_input():
     shuffled_distance = wavelet_packet_frechet_distance(output=shuffled_images,
                                                         target=target_images,
                                                         level=2,
-                                                        wavelet="sym5")
+                                                        wavelet="sym5",
+                                                        log_scale=False)
     unshuffled_distance = wavelet_packet_frechet_distance(output=output_images,
                                                           target=target_images,
                                                           level=2,
-                                                          wavelet="sym5")
+                                                          wavelet="sym5",
+                                                          log_scale=False)
     assert np.allclose(shuffled_distance, unshuffled_distance)
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize("wavelet", ["sym5", "db5", "Haar"])
@@ -71,7 +75,8 @@ def test_various_wavelets(wavelet, level):
     distance = wavelet_packet_frechet_distance(output=output_images,
                                                target=target_images,
                                                level=level,
-                                               wavelet=wavelet)
+                                               wavelet=wavelet,
+                                               log_scale=False)
     assert np.allclose(distance, 0.0, atol=1e-3)
 
 
@@ -85,7 +90,8 @@ def test_various_image_sizes(img_size_level):
     distance = wavelet_packet_frechet_distance(output=output_images,
                                                target=target_images,
                                                level=level,
-                                               wavelet="sym5")
+                                               wavelet="sym5",
+                                               log_scale=False)
     assert np.allclose(distance, 0.0, atol=1e-3)
 
 
@@ -132,6 +138,7 @@ def test_checkerboard_FWD():
         wfd_list.append(wavelet_packet_frechet_distance(output=torch.from_numpy(cimgs),
                                                         target=torch.from_numpy(reference),
                                                         level=3,
-                                                        wavelet="sym5"))
+                                                        wavelet="sym5",
+                                                        log_scale=False))
 
     assert all(a < b for a, b in pairwise(wfd_list))

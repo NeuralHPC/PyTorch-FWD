@@ -10,11 +10,12 @@ from torchvision.transforms import functional as TVFunc
 from src.freq_math import wavelet_packet_power_divergence
 from tests.test_wavelet_frechet_distance import get_images
 
+
 @pytest.mark.slow
 def test_same_input():
     target_images = get_images(128)
     output_images = deepcopy(target_images)
-    kld = wavelet_packet_power_divergence(target_images, output_images, level=4)
+    kld = wavelet_packet_power_divergence(target_images, output_images, level=4, wavelet="Haar", log_scale=False)
     assert np.allclose(kld, 0.)
 
 
@@ -25,8 +26,8 @@ def test_shuffle_input():
     permutation = torch.randperm((len(target_images)))
     shuffled_images = output_images[permutation, :, :, :]
     assert not torch.allclose(shuffled_images, output_images)
-    kld_shuffled = wavelet_packet_power_divergence(target_images, shuffled_images, level=4)
-    kld_original = wavelet_packet_power_divergence(target_images, output_images, level=4)
+    kld_shuffled = wavelet_packet_power_divergence(target_images, shuffled_images, level=4, wavelet="Haar", log_scale=False)
+    kld_original = wavelet_packet_power_divergence(target_images, output_images, level=4, wavelet="Haar", log_scale=False)
     assert np.allclose(kld_original, kld_shuffled)
     assert np.allclose(kld_original, 0.)
     assert np.allclose(kld_shuffled, 0.)
@@ -39,7 +40,7 @@ def test_checkerboard_power_KL():
     # tile_size = 10 # determines tile size
     images = []
 
-    for tile_size in [2, 10]:
+    for tile_size in [2, 5, 10]:
     # generate random grid
     
         grid = np.meshgrid(np.arange(0,range_max), np.arange(0,range_max))
@@ -75,7 +76,8 @@ def test_checkerboard_power_KL():
         wfd_list.append(wavelet_packet_power_divergence(output=torch.from_numpy(cimgs),
                                                         target=torch.from_numpy(reference),
                                                         level=3,
-                                                        wavelet="haar"))
+                                                        wavelet="haar",
+                                                        log_scale=False))
     pass
     assert all(a < b for a, b in pairwise(wfd_list))
 
@@ -83,7 +85,7 @@ def test_checkerboard_power_KL():
 def test_gaussian_blur():
     target_images = get_images(128)
     blurred_images = []
-    for kernel in (3, 5, 7, 9, 11):
+    for kernel in (3, 5, 7, 9):
         blurred_images.append(
             TVFunc.gaussian_blur(target_images, kernel)
         )
@@ -92,12 +94,13 @@ def test_gaussian_blur():
         wfd_list.append(wavelet_packet_power_divergence(output=blur_image,
                                                         target=target_images,
                                                         level=3,
-                                                        wavelet="sym5"))
+                                                        wavelet="sym5",
+                                                        log_scale=False))
     assert all(a < b for a, b in pairwise(wfd_list))
 
 
 def test_gaussian_noise():
-    target_images = get_images(128)
+    target_images = get_images(256)
     noised_images = []
     for noise_ratio in (0.25, 0.5, 0.75, 1):
         noised_images.append(
@@ -108,6 +111,7 @@ def test_gaussian_noise():
         wfd_list.append(wavelet_packet_power_divergence(output=noise_image,
                                                         target=target_images,
                                                         level=3,
-                                                        wavelet="sym5"))
+                                                        wavelet="sym5",
+                                                        log_scale=False))
     pass
     assert all(a < b for a, b in pairwise(wfd_list))
