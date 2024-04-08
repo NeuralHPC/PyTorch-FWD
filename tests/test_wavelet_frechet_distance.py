@@ -94,7 +94,7 @@ def test_various_image_sizes(img_size_level):
                                                log_scale=False)
     assert np.allclose(distance, 0.0, atol=1e-3)
 
-
+@pytest.mark.slow
 def test_checkerboard_FWD():
     import scipy.ndimage
 
