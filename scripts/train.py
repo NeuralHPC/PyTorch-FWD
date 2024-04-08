@@ -5,12 +5,13 @@ from typing import Any, Dict
 import torch
 import torch.distributed as dist
 import torch.nn as nn
+
+# from src.improved_UNet import Improv_UNet
+from diffusers import UNet2DModel
 from torch.utils.tensorboard import SummaryWriter
 
 from config import celeba, cifar10
 from src.dataloader import get_dataloaders, get_distributed_dataloader
-# from src.improved_UNet import Improv_UNet
-from diffusers import UNet2DModel
 from src.nn import get_loss_fn
 from src.trainer import Trainer
 from src.util import _get_global_rank, _get_local_rank, _parse_args
@@ -40,15 +41,15 @@ def instantiate_model(dataset: Dict[str, Any]) -> nn.Module:
     Returns:
         nn.Module: Instantiate the model.
     """
-# def instantiate_model(model_config: Dict[str, Any]) -> nn.Module:
-#     """Instantiate the UNet model.
+    # def instantiate_model(model_config: Dict[str, Any]) -> nn.Module:
+    #     """Instantiate the UNet model.
 
-#     Args:
-#         model_config (Dict[str, Any]): Dictionary containing the model configuration details.
+    #     Args:
+    #         model_config (Dict[str, Any]): Dictionary containing the model configuration details.
 
-#     Returns:
-#         nn.Module: Instantiate the model.
-#     """
+    #     Returns:
+    #         nn.Module: Instantiate the model.
+    #     """
     # attn_res = []
     # for value in model_config["attn_res"]:
     #     attn_res.append(model_config["input_size"] // int(value))
@@ -77,7 +78,7 @@ def instantiate_model(dataset: Dict[str, Any]) -> nn.Module:
     elif "bedroom" in dataset.lower():
         name = "google/ddpm-bedroom-256"
     else:
-        raise NotImplementedError('Improper dataset.')
+        raise NotImplementedError("Improper dataset.")
     model = UNet2DModel.from_pretrained(name)
     return model
 
@@ -103,12 +104,11 @@ def main():
     # model = instantiate_model(config.model_config)
     model = instantiate_model(args.dataset)
 
-
     if config.data_dir is None:
         raise ValueError(
             "Datapath is None, please set the datapath in corresponding config file."
         )
-    if (not os.path.exists(config.data_dir)) and ('CIFAR' not in args.dataset):
+    if (not os.path.exists(config.data_dir)) and ("CIFAR" not in args.dataset):
         raise ValueError(
             "Data directory doesnot exist, please provide proper path in corresponding config file."
         )
@@ -182,7 +182,7 @@ def main():
         save_path=save_path,
         std=config.dataset_config["std"],
         mean=config.dataset_config["mean"],
-        input_shape=config.model_config["input_size"]
+        input_shape=config.model_config["input_size"],
     )
     trainer.train(
         max_epochs=args.epochs, dataloader=train_loader, sampler=train_sampler

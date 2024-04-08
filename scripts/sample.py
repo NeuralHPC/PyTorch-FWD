@@ -1,4 +1,5 @@
 """Sample based on the dataset."""
+
 import os
 
 import torch
@@ -26,7 +27,7 @@ def main():
         raise ValueError(
             "Datapath is None, please set the datapath in corresponding config file."
         )
-    if not os.path.exists(config.data_dir) and ('CIFAR' not in args.dataset):
+    if not os.path.exists(config.data_dir) and ("CIFAR" not in args.dataset):
         raise ValueError(
             "Data directory doesnot exist, please provide proper path in corresponding config file."
         )
@@ -45,7 +46,7 @@ def main():
         batch_size=args.batch_size,
         num_workers=config.dataset_config["num_workers"],
     )
-    path_nm = args.ckpt_path.split/('/')[-2]
+    path_nm = args.ckpt_path.split / ("/")[-2]
     save_path = f"./sample_imgs_{args.sampler}_{path_nm}/"
     os.makedirs(save_path, exist_ok=True)
 

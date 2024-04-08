@@ -3,10 +3,10 @@ import os
 from typing import Dict, Tuple
 
 import torch
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 from torchvision import datasets, transforms
-from PIL import Image
 
 
 class CelebAHQDataset(Dataset):
@@ -116,8 +116,7 @@ def get_dataloaders(
         )
     elif "celebahq" in dataset_name.lower():
         normalize = transforms.Normalize(
-            mean = [0.5169 , 0.4167 , 0.36327],
-            std = [0.29934, 0.27131, 0.26649]
+            mean=[0.5169, 0.4167, 0.36327], std=[0.29934, 0.27131, 0.26649]
         )
         train_set = CelebAHQDataset(
             data_path,

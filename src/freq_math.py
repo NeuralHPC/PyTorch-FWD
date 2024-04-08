@@ -1,14 +1,16 @@
+from copy import deepcopy
+from functools import partial
 from itertools import product
 from typing import Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import ptwt
 import pywt
 import torch
 import torch.nn.functional as F
-from copy import deepcopy
-
 from scipy import linalg
+from tqdm import tqdm
 
 
 def get_freq_order(level: int):
@@ -85,22 +87,51 @@ def unfold_channels(
 
 def forward_wavelet_packet_transform(
     tensor: torch.Tensor,
-    wavelet: str = "db3",
-    max_level: int = 3,
-    log_scale: bool = False,
+    wavelet: str,
+    max_level: int,
+    log_scale: bool,
 ) -> torch.Tensor:
-    tensor = tensor.type(torch.FloatTensor)
+    # ideally the output dtype should depend in the input.
+    # tensor = tensor.type(torch.FloatTensor)
     packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=max_level)
-    packet_list = []
+    packet_list = [packets[node] for node in packets.get_natural_order(max_level)]
 
-    for node in packets.get_natural_order(max_level):
-        packet = torch.squeeze(packets[node], dim=1)
-        packet_list.append(packet)
+    # for node in packets.get_natural_order(max_level):
+    # packet = torch.squeeze(packets[node], dim=1)
+    # packet_list.append(packets[node])
     wp_pt_rs = torch.stack(packet_list, axis=1)
     if log_scale:
-        wp_pt_rs = torch.log(torch.abs(wp_pt_rs) + 1e-12)
+        wp_pt_rs = torch.log(torch.abs(wp_pt_rs) + 1e-6)
 
     return wp_pt_rs
+
+
+def batched_packet_transform(
+    tensor: torch.Tensor, wavelet: str, max_level: int, log_scale: bool, batch_size: int
+) -> torch.Tensor:
+    """Compute wavelet packet transform over batches.
+
+    Args:
+        tensor (torch.Tensor): Input tensor of shape [BS, CHANNELS, HEIGHT, WIDTH]
+        wavelet (str): Choice of wavelet
+        max_level (int): Maximum decomposition level
+        log_scale (bool): Whether to apply log scale
+        batch_size (int): Batch size for tensor split
+
+    Returns:
+        torch.Tensor: Tensor containing packets of shape [BS, PACKETS, CHANNELS, HEIGHT, WIDTH]
+
+    """
+    assert (
+        len(tensor.shape) == 4
+    ), "Input tensor for packet transforms must have 4 dimensions"
+    batched_tensor = tensor.split(split_size=batch_size, dim=0)
+    packets = []
+    for image_batch in batched_tensor:
+        packets.append(
+            forward_wavelet_packet_transform(image_batch, wavelet, max_level, log_scale)
+        )
+    return torch.cat(packets, dim=0)
 
 
 def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
@@ -160,9 +191,21 @@ def inverse_wavelet_packet_transform(
     return rec
 
 
-def compute_kl_divergence(output: torch.Tensor, target: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
+def compute_kl_divergence(
+    output: torch.Tensor, target: torch.Tensor, eps: float = 1e-30
+) -> torch.Tensor:
+    """Compute KL Divergence
+
+    Args:
+        output (torch.Tensor): Output Images
+        target (torch.Tensor): Target Images
+        eps (float, optional): Epsilon. Defaults to 1e-12.
+
+    Returns:
+        torch.Tensor: KL Divergence value
+    """
     # Tried with eps 1e-30 and this improves the precision by a small margin but overall ranking remains the same
-    return target * torch.log(((target) / (output + eps)) + eps)
+    return target * torch.log((target / (output + eps)) + eps)
 
 
 def fourier_power_divergence(
@@ -177,14 +220,18 @@ def fourier_power_divergence(
 
     Returns:
         (torch.Tensor): A scalar metric.
+
+    TODO:REMOVE
     """
-    assert output.shape == target.shape, "Sampled and reference images should have same shape."
-    
+    assert (
+        output.shape == target.shape
+    ), "Sampled and reference images should have same shape."
+
     output_fft = torch.abs(torch.fft.fft2(output)) ** 2
     target_fft = torch.abs(torch.fft.fft2(target)) ** 2
-    
-    b, c, _, _  = output_fft.shape
-    
+
+    b, c, _, _ = output_fft.shape
+
     output_fft = output_fft.swapaxes(0, 1)
     target_fft = target_fft.swapaxes(0, 1)
     output_power = torch.reshape(output_fft, (c, -1))
@@ -192,17 +239,20 @@ def fourier_power_divergence(
     output_power = output_power / torch.sum(output_power, dim=-1, keepdim=True)
     target_power = target_power / torch.sum(target_power, dim=-1, keepdim=True)
 
-
     kld_AB = compute_kl_divergence(output_power, target_power)
     kld_BA = compute_kl_divergence(target_power, output_power)
-    
+
     kld_AB = torch.sum(kld_AB, dim=-1)
     kld_BA = torch.sum(kld_BA, dim=-1)
     return torch.mean(kld_AB), torch.mean(kld_BA)
 
 
 def wavelet_packet_power_divergence(
-    output: torch.Tensor, target: torch.Tensor, level: int = 3, wavelet: str = 'sym5'
+    output: torch.Tensor,
+    target: torch.Tensor,
+    level: int,
+    wavelet: str,
+    log_scale: bool,
 ) -> torch.Tensor:
     """Compute the wavelet packet power divergence.
 
@@ -220,52 +270,72 @@ def wavelet_packet_power_divergence(
         output (torch.Tensor): The network output
         target (torch.Tensor): The target image
         level  (int): Wavelet level to use. Defaults to 3
-        wavelet(str): Type of wavelet to use. Defaults to sym5 
+        wavelet(str): Type of wavelet to use. Defaults to sym5
 
     Returns:
         torch.Tensor: Wavelet power divergence metric
     """
-    assert output.shape == target.shape, "Sampled and reference images should have same shape."
-    # print(f"Using wavelet: {wavelet} with level: {level}")
+    assert (
+        output.shape == target.shape
+    ), "Sampled and reference images should have same shape."
 
-    output_packets = forward_wavelet_packet_transform(output, max_level=level, wavelet=wavelet)
-    target_packets = forward_wavelet_packet_transform(target, max_level=level, wavelet=wavelet)
-    
-    # fpd = wavelet_packet_frechet_distance(
-    #     deepcopy(output_packets),
-    #     deepcopy(target_packets)
-    #     )
+    output_packets = batched_packet_transform(
+        output, max_level=level, wavelet=wavelet, log_scale=log_scale, batch_size=2500
+    )
+    target_packets = batched_packet_transform(
+        target, max_level=level, wavelet=wavelet, log_scale=log_scale, batch_size=2500
+    )
 
-    output_energy = torch.abs(output_packets) ** 2
-    target_energy = torch.abs(target_packets) ** 2
+    B, P, C, H, W = output_packets.shape
+    output_packets = torch.reshape(output_packets, (B, P, C, H * W))
+    target_packets = torch.reshape(target_packets, (B, P, C, H * W))
 
-    b, p, c, h, w = output_packets.shape
-    # reshape into p, c, b, h, w
-    output_energy_p = output_energy.permute([1, 2, 0, 3, 4])
-    target_energy_p = target_energy.permute([1, 2, 0, 3, 4])
-    output_energy_r = output_energy_p.reshape((p, c, -1))
-    target_energy_r = target_energy_p.reshape((p, c, -1))
+    B, P, C, Px = output_packets.shape
+    assert output_packets.shape == target_packets.shape, "Reshape shapes are not same."
+
+    p_tar_hists = []
+    p_out_hists = []
+    for pindex in range(P):
+        c_tar_hists = []
+        c_out_hists = []
+        for cindex in range(C):
+            op_pack = output_packets[:, pindex, cindex, :].flatten()
+            tg_pack = target_packets[:, pindex, cindex, :].flatten()
+            max_val = torch.max(
+                torch.max(torch.abs(op_pack)), torch.max(torch.abs(tg_pack))
+            )
+            max_val = 1e-12 if max_val == 0 else max_val
+            op_pack = op_pack / max_val
+            tg_pack = tg_pack / max_val
+            output_hist, _ = torch.histogram(
+                op_pack, bins=int((B * Px) ** 0.5), range=(-1, 1)
+            )
+            target_hist, _ = torch.histogram(
+                tg_pack, bins=int((B * Px) ** 0.5), range=(-1, 1)
+            )
+            c_tar_hists.append(target_hist)
+            c_out_hists.append(output_hist)
+        p_tar_hists.append(torch.stack(c_tar_hists))
+        p_out_hists.append(torch.stack(c_out_hists))
+
+    output_hist = torch.stack(p_out_hists)
+    target_hist = torch.stack(p_tar_hists)
+
+    # output_hist = torch.nn.functional.softmax(output_hist)
+    # target_hist = torch.nn.functional.softmax(target_hist)
+    output_hist = output_hist / (torch.sum(output_hist, dim=-1, keepdim=True) + 1e-12)
+    target_hist = target_hist / (torch.sum(target_hist, dim=-1, keepdim=True) + 1e-12)
+
+    kld_ab = compute_kl_divergence(output_hist, target_hist)
+    kld_ba = compute_kl_divergence(target_hist, output_hist)
+    kld = 0.5 * (kld_ab + kld_ba)
+    return torch.mean(kld).item()  # Average kldivergence across packets and channels
 
 
-    output_power = output_energy_r / torch.sum(output_energy_r, dim=-1, keepdim=True)
-    target_power = target_energy_r / torch.sum(target_energy_r, dim=-1, keepdim=True)
-    del output_energy
-    del target_energy
-    del output_packets
-    del target_packets
+def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
+    """Implementation from https://github.com/mseitzer/pytorch-fid.
 
-    kld_AB = compute_kl_divergence(output_power, target_power)
-    kld_BA = compute_kl_divergence(target_power, output_power)
-    del output_power
-    del target_power
-    
-    kld_AB = torch.sum(kld_AB, dim=-1)
-    kld_BA = torch.sum(kld_BA, dim=-1)
-    return torch.mean(kld_AB), torch.mean(kld_BA)
-
-
-def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarray, sigma2: np.ndarray, eps: float = 1e-12) -> np.ndarray:
-    """Numpy implementation of the Frechet Distance.
+    Numpy implementation of the Frechet Distance.
     The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
     and X_2 ~ N(mu_2, C_2) is
             d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
@@ -285,90 +355,124 @@ def compute_frechet_distance(mu1: np.ndarray, mu2: np.ndarray, sigma1: np.ndarra
     Returns:
     --   : The Frechet Distance.
     """
+
     mu1 = np.atleast_1d(mu1)
     mu2 = np.atleast_1d(mu2)
 
     sigma1 = np.atleast_2d(sigma1)
     sigma2 = np.atleast_2d(sigma2)
 
-    assert mu1.shape == mu2.shape, \
-        'Training and test mean vectors have different lengths'
-    assert sigma1.shape == sigma2.shape, \
-        'Training and test covariances have different dimensions'
+    assert (
+        mu1.shape == mu2.shape
+    ), "Training and test mean vectors have different lengths"
+    assert (
+        sigma1.shape == sigma2.shape
+    ), "Training and test covariances have different dimensions"
 
     diff = mu1 - mu2
 
-    prod = sigma1.dot(sigma2)
-    l, v = np.linalg.eigh(prod)
-    covmean = v @ np.diag(np.emath.sqrt(l)) @ v.T
+    # Product might be almost singular
+    covmean = linalg.sqrtm(sigma1.dot(sigma2))
+    if not np.isfinite(covmean).all():
+        msg = (
+            "fid calculation produces singular product; "
+            "adding %s to diagonal of cov estimates"
+        ) % eps
+        print(msg)
+        offset = np.eye(sigma1.shape[0]) * eps
+        covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
 
-    tr_covmean = np.absolute(np.trace(covmean))
+    # Numerical error might give slight imaginary component
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError("Imaginary component {}".format(m))
+        covmean = covmean.real
 
-    return (diff.dot(diff) + np.trace(sigma1)
-            + np.trace(sigma2) - 2 * tr_covmean)
+    tr_covmean = np.trace(covmean)
+
+    return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
+
 
 def wavelet_packet_frechet_distance(
-        output_packets: torch.Tensor, target_packets: torch.Tensor
-) -> np.ndarray:
-    """Compute the frechet packet distance.
+    output: torch.Tensor,
+    target: torch.Tensor,
+    level: int,
+    wavelet: str,
+    log_scale: bool,
+) -> float:
+    """Compute wavelet packet Frechet distance.
 
     Args:
-        output_packets (torch.Tensor): The network output packets
-        target_packets (torch.Tensor): The target image packets
+        output (torch.Tensor): Generated images of shape [B, C, H, W].
+        target (torch.Tensor): Ground truth images. Same shape as output.
+        level (int, optional): Wavelet decomposition level. Defaults to 4.
+        wavelet (str, optional): Wavelet type to use. Defaults to "sym5".
 
     Returns:
-        np.ndarray: Frechet packet distance
+        float: Wavelet packet Frechet distance.
     """
-    assert output_packets.shape == target_packets.shape, "Sampled and reference packets should have same shape."
-
-    b, p, c, h, w = output_packets.shape
-    output_energy = np.reshape(np.absolute(output_packets.numpy()) ** 2, (b*p*c, h*w))
-    del output_packets
-    target_energy = np.reshape(np.absolute(target_packets.numpy()) ** 2, (b*p*c, h*w))
-    del target_packets
-
-    mu1 = np.mean(output_energy, axis=0)
-    sigma1 = np.cov(output_energy, rowvar=False)
-
-    mu2 = np.mean(target_energy, axis=0)
-    sigma2 = np.cov(target_energy, rowvar=False)
-
-    fpd = compute_frechet_distance(
-        mu1=mu1, mu2=mu2,
-        sigma1=sigma1, sigma2=sigma2
+    assert output.shape == target.shape, "Output and target must be of same shape."
+    # Compute wavelet packet transform.
+    output_packets = batched_packet_transform(
+        tensor=output,
+        wavelet=wavelet,
+        max_level=level,
+        log_scale=log_scale,
+        batch_size=2500,
     )
-    return fpd
-
-
-def fourier_frechet_distance(
-        output: torch.Tensor, target: torch.Tensor
-) -> np.ndarray:
-    """Compute frechet frequency distance.
-
-    Args:
-        output (torch.Tensor): The network output
-        target (torch.Tensor): The target image
-
-    Returns:
-        np.ndarray: Frechet frequency distance
-    """
-    assert output.shape == target.shape, "Sampled and reference images should have same shape."
-
-    output_fft = torch.abs(torch.fft.fft2(output)) ** 2
-    target_fft = torch.abs(torch.fft.fft2(target)) ** 2
-    
-    b, c, h, w = output_fft.shape
-    output_fft = np.reshape(output_fft.numpy(), (b*c, h*w))
-    target_fft = np.reshape(target_fft.numpy(), (b*c, h*w))
-
-    mu1 = np.mean(output_fft, axis=0)
-    sigma1 = np.cov(output_fft, rowvar=False)
-
-    mu2 = np.mean(target_fft, axis=0)
-    sigma2 = np.cov(target_fft, rowvar=False)
-
-    ffd = compute_frechet_distance(
-        mu1=mu1, mu2=mu2,
-        sigma1=sigma1, sigma2=sigma2
+    target_packets = batched_packet_transform(
+        tensor=target,
+        wavelet=wavelet,
+        max_level=level,
+        log_scale=log_scale,
+        batch_size=2500,
     )
-    return ffd
+    assert (
+        output_packets.shape == target_packets.shape
+    ), "Output & target packets are not of same shape."
+
+    # Permute patches and batch dimensions
+    output_packets = torch.permute(output_packets, (1, 0, 2, 3, 4))
+    target_packets = torch.permute(target_packets, (1, 0, 2, 3, 4))
+    PACKETS, BATCH, CHANNELS, HEIGHT, WIDTH = output_packets.shape
+
+    # Flatten each packet in batch into vector
+    output_reshaped = torch.reshape(
+        output_packets, (PACKETS, BATCH, CHANNELS * HEIGHT * WIDTH)
+    )
+    target_reshaped = torch.reshape(
+        target_packets, (PACKETS, BATCH, CHANNELS * HEIGHT * WIDTH)
+    )
+
+    output_array = output_reshaped.detach().cpu().numpy()
+    target_array = target_reshaped.detach().cpu().numpy()
+
+    output_means = [
+        np.mean(output_array[packet_no, :, :], axis=0) for packet_no in range(PACKETS)
+    ]
+    target_means = [
+        np.mean(target_array[packet_no, :, :], axis=0) for packet_no in range(PACKETS)
+    ]
+
+    output_covs = [
+        np.cov(output_array[packet_no, :, :], rowvar=False)
+        for packet_no in range(PACKETS)
+    ]
+    target_covs = [
+        np.cov(target_array[packet_no, :, :], rowvar=False)
+        for packet_no in range(PACKETS)
+    ]
+
+    # print("Computing per packet FID...")
+    frechet_distances = []
+    # for packet_no in tqdm(range(PACKETS)):
+    for packet_no in range(PACKETS):
+        frechet_distance = calculate_frechet_distance(
+            mu1=output_means[packet_no],
+            mu2=target_means[packet_no],
+            sigma1=output_covs[packet_no],
+            sigma2=target_covs[packet_no],
+        )
+        frechet_distances.append(frechet_distance)
+    return np.mean(frechet_distances)
