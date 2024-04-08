@@ -1,6 +1,7 @@
 """
 Various utilities for neural networks as in https://github.com/openai/improved-diffusion/blob/main/improved_diffusion/nn.py.
 """
+
 import argparse
 import math
 from functools import partial
@@ -241,7 +242,9 @@ def PacketLoss(
         norm_weights = torch.reshape(torch.Tensor(norm_weights), (1, -1, 1, 1, 1))
         return norm_weights * packets
 
-    def log_scale_packets(packets: torch.Tensor) -> torch.Tensor:    #TODO: Rename this to max scaling instead of log scaling
+    def log_scale_packets(
+        packets: torch.Tensor,
+    ) -> torch.Tensor:  # TODO: Rename this to max scaling instead of log scaling
         """Normalize packets by log scaling.
 
         Args:
@@ -254,8 +257,12 @@ def PacketLoss(
         packets_max = torch.amax(torch.abs(packets), dim=(0, 2, 3, 4), keepdim=True)
         return packets / (packets_max + 1e-12)
 
-    output_packets = forward_wavelet_packet_transform(output, wavelet, level)
-    target_packets = forward_wavelet_packet_transform(target, wavelet, level)
+    output_packets = forward_wavelet_packet_transform(
+        output, wavelet, level, log_scale=False
+    )
+    target_packets = forward_wavelet_packet_transform(
+        target, wavelet, level, log_scale=False
+    )
     if norm_fn is not None:
         packet_norm = (
             log_scale_packets

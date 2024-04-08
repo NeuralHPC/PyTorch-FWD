@@ -78,10 +78,10 @@ def test_checkerboard_power_KL():
                                                         level=3,
                                                         wavelet="haar",
                                                         log_scale=False))
-    pass
     assert all(a < b for a, b in pairwise(wfd_list))
 
 
+@pytest.mark.slow
 def test_gaussian_blur():
     target_images = get_images(128)
     blurred_images = []
@@ -99,6 +99,7 @@ def test_gaussian_blur():
     assert all(a < b for a, b in pairwise(wfd_list))
 
 
+@pytest.mark.slow
 def test_gaussian_noise():
     target_images = get_images(256)
     noised_images = []

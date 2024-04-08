@@ -1,0 +1,23 @@
+name: Tests
+
+on: [ push ]
+
+jobs:
+  tests:
+    name: tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+        python-version: [3.9, 3.11]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install nox
+      - name: Test with pytest
+        run:
+          nox -s fast-test

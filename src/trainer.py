@@ -1,7 +1,8 @@
 """Torch DDP training script for diffusion."""
+
 import argparse
 import os.path
-from typing import Tuple, Union, List
+from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -11,7 +12,7 @@ from torch.utils.data import DataLoader, Sampler
 from torch.utils.tensorboard import SummaryWriter
 
 from src.freq_math import fourier_power_divergence, wavelet_packet_power_divergence
-from src.sample_util import linear_noise_scheduler, sample_noise, sample_DDPM
+from src.sample_util import linear_noise_scheduler, sample_DDPM, sample_noise
 from src.util import _get_global_rank, _get_local_rank
 
 
@@ -26,7 +27,7 @@ class Trainer:
         save_path: str,
         std: List[float] = [],
         mean: List[float] = [],
-        input_shape: int = 32
+        input_shape: int = 32,
     ) -> None:
         """DDP Train class.
 
@@ -55,7 +56,7 @@ class Trainer:
                 if self.__global_rank == 0:
                     self.__load_checkpoint(args.model_path)
         self.model = DDP(
-            self.model, device_ids=[self.__local_rank]#, find_unused_parameters=True
+            self.model, device_ids=[self.__local_rank]  # , find_unused_parameters=True
         )
 
         # Initialize training variables
@@ -126,7 +127,9 @@ class Trainer:
 
             # Forward pass and loss calculation
             self.__optimizer.zero_grad()
-            pred_noise = self.model(x, current_steps, return_dict=False)#, class_label)
+            pred_noise = self.model(
+                x, current_steps, return_dict=False
+            )  # , class_label)
             loss_val = self.__loss_fn(pred_noise[0], y)
 
             torch.cuda.synchronize()
@@ -166,27 +169,41 @@ class Trainer:
                 # if (epoch % 5 == 0) or last_epoch:
                 if (epoch >= 0) or last_epoch:
                     # Sample validation set
-                    sample_imgs, original_imgs = self.__validation_sample(16, dataloader)
-                    self.__tensorboard.add_images("Original images", original_imgs[:8, :, :, :], epoch)
-                    self.__tensorboard.add_images("Sampled images", sample_imgs[:8, :, :, :], epoch)
+                    sample_imgs, original_imgs = self.__validation_sample(
+                        16, dataloader
+                    )
+                    self.__tensorboard.add_images(
+                        "Original images", original_imgs[:8, :, :, :], epoch
+                    )
+                    self.__tensorboard.add_images(
+                        "Sampled images", sample_imgs[:8, :, :, :], epoch
+                    )
                     # Compute fourier and wavelet power spectrum loss
-                    fft_ab, fft_ba = fourier_power_divergence(sample_imgs, original_imgs)
-                    packet_ab, packet_ba = wavelet_packet_power_divergence(sample_imgs, original_imgs)
+                    fft_ab, fft_ba = fourier_power_divergence(
+                        sample_imgs, original_imgs
+                    )
+                    packet_ab, packet_ba = wavelet_packet_power_divergence(
+                        sample_imgs, original_imgs
+                    )
                     fft_mean = 0.5 * (fft_ab + fft_ba)
                     packet_mean = 0.5 * (packet_ab + packet_ba)
                     self.__tensorboard.add_scalar("PS_fft_KLD", fft_mean.item(), epoch)
-                    self.__tensorboard.add_scalar("PS_packet_KLD", packet_mean.item(), epoch)
+                    self.__tensorboard.add_scalar(
+                        "PS_packet_KLD", packet_mean.item(), epoch
+                    )
                     self.model.train()
                 if (epoch % self.__save_every == 0) or last_epoch:
                     self.__save_checkpoint(epoch)
 
-    def __validation_sample(self, bs: int, dataloader: DataLoader) -> Tuple[torch.Tensor]:
+    def __validation_sample(
+        self, bs: int, dataloader: DataLoader
+    ) -> Tuple[torch.Tensor]:
         """Generate samples for validation purpose.
 
         Args:
             bs (int): Batch size for validation
             dataloader (DataLoader): Training datalaoder for labels
-        
+
         Returns:
             Tuple[torch.Tensor]: Tuple containing sampled and original images
         """
@@ -204,15 +221,17 @@ class Trainer:
                 model=self.model,
                 max_steps=self.__time_steps,
                 input_shape=(bs, 3, self.__input_dim, self.__input_dim),
-                device=self.__local_rank
+                device=self.__local_rank,
             )
 
-            if self.__std.nelement() != 0  and self.__mean.nelement() != 0:
+            if self.__std.nelement() != 0 and self.__mean.nelement() != 0:
                 x_0 = (x_0 * self.__std) + self.__mean
                 imgs = (imgs * self.__std) + self.__mean
             print(x_0.shape)
             print(imgs.shape)
-            assert x_0.shape == imgs.shape, "generated images must be same shape as input."
+            assert (
+                x_0.shape == imgs.shape
+            ), "generated images must be same shape as input."
             return x_0, imgs
 
     def __preprocess_input(self, input_imgs: torch.Tensor) -> Tuple[torch.Tensor]:

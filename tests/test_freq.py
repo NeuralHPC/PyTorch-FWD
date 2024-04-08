@@ -33,7 +33,8 @@ def test_inverse_wp():
     b, h, w, c = face.shape
     face = torch.reshape(face, (b, c, h, w))
 
-    packets = forward_wavelet_packet_transform(face, max_level=3, wavelet="db3")
+    packets = forward_wavelet_packet_transform(face, max_level=3, wavelet="db3", 
+                                               log_scale=False)
 
     reconstruction = inverse_wavelet_packet_transform(
         packets, max_level=3, wavelet="db3"
@@ -41,6 +42,7 @@ def test_inverse_wp():
     assert torch.max(torch.abs(reconstruction[:, :, :768, :1024] - face)) < 1e-5
 
 
+@pytest.mark.slow
 def test_batched_packet_transform():
     images = get_images(256)
     permutation = torch.randperm(len(images))

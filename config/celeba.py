@@ -394,4 +394,6 @@ class CELEBAHQ256:
             "clip_grad_norm": 1.0,  # TODO: Check this again.
         }
 
-        self.data_dir: str = "/p/scratch/holistic-vid-westai/veeramacheneni2_scratch/CelebAMask-HQ/data256x256/"
+        self.data_dir: str = (
+            "/p/scratch/holistic-vid-westai/veeramacheneni2_scratch/CelebAMask-HQ/data256x256/"
+        )

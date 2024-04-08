@@ -57,7 +57,6 @@ def test(session):
     session.run("pytest")
 
 
-
 @nox.session(name="fast-test")
 def run_test_fast(session):
     """Run pytest."""
