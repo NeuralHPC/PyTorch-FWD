@@ -254,6 +254,7 @@ def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
 #     return (diff.dot(diff) + np.trace(sigma1)
 #             + np.trace(sigma2) - 2 * tr_covmean)
 
+
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     """Implementation from https://github.com/bioinf-jku/TTUR/blob/master/fid.py.
 

@@ -11,7 +11,6 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from tqdm import tqdm
 
 th.set_default_dtype(th.float64)
-# from multiprocessing import Pool
 
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
@@ -20,7 +19,7 @@ parser.add_argument("--num-processes", type=int, default=None, help="Number of m
 parser.add_argument("--save-packets", action="store_true", help="Save the packets as npz file.")
 parser.add_argument("--wavelet", type=str, default="sym5", help="Choice of wavelet.")
 parser.add_argument("--max_level", type=int, default=4, help="wavelet decomposition level")
-parser.add_argument("--log_scale", action="store_false", help="Use log scaling for wavelets.")
+parser.add_argument("--log_scale", action="store_true", help="Use log scaling for wavelets.")
 parser.add_argument("path", type=str, nargs=2, help="Path to the generated images or path to .npz statistics file.")
 
 IMAGE_EXTS = {"jpg", "jpeg", "png"}
@@ -41,8 +40,6 @@ class ImagePathDataset(th.utils.data.Dataset):
         if self.transforms is not None:
             img = self.transforms(img)
         return img
-# def read_image(img_name):
-#     return TVF.pil_to_tensor(Image.open(img_name).convert("RGB"))/255.
 
 
 def packet_transform(
@@ -65,17 +62,13 @@ def packet_transform(
     packets = []
     device = th.device('cuda:0') if th.cuda.is_available() else th.device('cpu')
     for img_batch in tqdm(dataloader):
-        # image = [read_image(nm) for nm in img_batch]
-        # # with Pool(NUM_PROCESSES) as p:
-        # #     image = p.map(read_image, img_batch)
-        # tensor_ = th.stack(image, dim=0)
         img_batch = img_batch.to(device)
         packets.append(
             forward_wavelet_packet_transform(
                 img_batch,
                 wavelet,
                 max_level,
-                log_scale
+                False
             ).cpu()
         )
     packet_tensor = th.cat(packets, dim=0)
@@ -104,9 +97,6 @@ def compute_statistics(
     """
     packets = packet_transform(dataloader, wavelet, max_level, log_scale)
     print('Computing mean and std for each packet.')
-    # packets = packets.numpy()
-    # mu = np.mean(packets, axis=1)
-    # sigma = np.array([np.cov(packets[p, :, :], rowvar=False) for p in tqdm(range(len(packets)))])
     mu = th.mean(packets, dim=1).numpy()
     sigma = th.stack([th.cov(packets[p, :, :].T) for p in range(len(packets))], dim=0).numpy()
     return mu, sigma
@@ -223,7 +213,10 @@ def save_packets(paths: List[str], wavelet: str, max_level:int, log_scale: bool,
 def main():
     global NUM_PROCESSES, IMAGE_EXTS
 
+    th.manual_seed(0)
+    th.use_deterministic_algorithms(True)
     args = parser.parse_args()
+    print(args)
     if args.num_processes is None:
         try:
             num_cpus = len(os.sched_getaffinity(0))
