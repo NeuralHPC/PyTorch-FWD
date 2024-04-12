@@ -10,8 +10,6 @@ def format(session):
     session.install("isort")
     session.run("isort", "src", "noxfile.py")
     session.run("black", "src", "noxfile.py")
-    session.run("isort", "config", "noxfile.py")
-    session.run("black", "config", "noxfile.py")
     session.run("isort", "scripts", "noxfile.py")
     session.run("black", "scripts", "noxfile.py")
 
@@ -52,10 +50,10 @@ def mypy(session):
 
 @nox.session(name="test")
 def test(session):
+    """Run long pytest."""
     session.install("-r", "requirements.txt")
     session.chdir("tests")
     session.run("pytest")
-
 
 
 @nox.session(name="fast-test")

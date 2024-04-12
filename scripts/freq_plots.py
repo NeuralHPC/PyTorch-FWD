@@ -1,23 +1,27 @@
 import pickle
-import numpy as np
-from PIL import Image
-import matplotlib.pyplot as plt
-import torch
+from concurrent.futures import ThreadPoolExecutor as Pool
+from functools import partial
 from glob import glob
-from tqdm import tqdm
+from itertools import product
+
+import matplotlib.pyplot as plt
+import numpy as np
 import ptwt
 import pywt
 import tikzplotlib as tikz
-from itertools import product
-from functools import partial
-from concurrent.futures import ThreadPoolExecutor as Pool
+import torch
+from PIL import Image
+from tqdm import tqdm
 
-
-original_path = glob('../cifar_data/cifar10_train/*.jpg')
-sample_path_wave = glob('./sample_imgs_DDPM_CIFAR10_PACKET_2023-10-31_19-28-42-304774_seed_42/sample_imgs_torch/*.jpg')
-sample_path_mse = glob('/home/lveerama/results/metrics_sampled_images/cifar10/DDPM/sample_imgs_torch/*.jpg')
+original_path = glob("../cifar_data/cifar10_train/*.jpg")
+sample_path_wave = glob(
+    "./sample_imgs_DDPM_CIFAR10_PACKET_2023-10-31_19-28-42-304774_seed_42/sample_imgs_torch/*.jpg"
+)
+sample_path_mse = glob(
+    "/home/lveerama/results/metrics_sampled_images/cifar10/DDPM/sample_imgs_torch/*.jpg"
+)
 level = 2
-wvlt = 'Haar'
+wvlt = "Haar"
 
 
 def tikzplotlib_fix_ncols(obj):
@@ -98,7 +102,7 @@ def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
 
 def get_image(image_path):
     try:
-        return np.array(Image.open(image_path).convert('RGB'))
+        return np.array(Image.open(image_path).convert("RGB"))
     except Exception as e:
         print(f"error: {e}, path: {image_path}")
         return None
@@ -113,7 +117,9 @@ def get_images(paths):
     return torch.from_numpy(imgs)
 
 
-def process(tensor: torch.Tensor, paths: list, wavelet: str, level: int, log_scale: bool = True) -> torch.Tensor:
+def process(
+    tensor: torch.Tensor, paths: list, wavelet: str, level: int, log_scale: bool = True
+) -> torch.Tensor:
     packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=level)
     packet_list = []
     for node in paths:
@@ -125,34 +131,49 @@ def process(tensor: torch.Tensor, paths: list, wavelet: str, level: int, log_sca
     return wp_pt
 
 
-
 def compute_power_spectrum(input_tensor):
-    square =  input_tensor**2
+    square = input_tensor**2
     return square / np.sum(square**2, axis=(1, 3, 4), keepdims=True)
 
 
 def plot_freq_celebA():
     to_plot = []
     level = 4
-    wavelet = 'sym5'
+    wavelet = "sym5"
     nested_freq_path, natural_path = get_freq_order(level=level)
     freq_path = []
     for freq in nested_freq_path:
         freq_path.extend(freq)
 
-    original_images = glob("/p/scratch/holistic-vid-westai/veeramacheneni2_scratch/CelebAMask-HQ/data256x256/*.jpg")
-    ddpm_images = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/DDPM/sample_imgs_torch/*.jpg")
-    ddim_images = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/DDIM/sample_imgs_torch/*.jpg")
-    styleswin_images = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/StyleSwin/celeba_256/samples/eval_0/*.png")
-    wavediff = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/WaveDiff/celeba_256/*.jpg")
-    ddgan = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/DDGAN/celeba_256/*.jpg")
-    stylegan2 = glob("/p/scratch/holistic-vid-westai/wolter1_scratch/StyleGAN2/samples_celeba/*.png")
+    original_images = glob(
+        "/p/scratch/holistic-vid-westai/veeramacheneni2_scratch/CelebAMask-HQ/data256x256/*.jpg"
+    )
+    ddpm_images = glob(
+        "/p/scratch/holistic-vid-westai/wolter1_scratch/DDPM/sample_imgs_torch/*.jpg"
+    )
+    ddim_images = glob(
+        "/p/scratch/holistic-vid-westai/wolter1_scratch/DDIM/sample_imgs_torch/*.jpg"
+    )
+    styleswin_images = glob(
+        "/p/scratch/holistic-vid-westai/wolter1_scratch/StyleSwin/celeba_256/samples/eval_0/*.png"
+    )
+    wavediff = glob(
+        "/p/scratch/holistic-vid-westai/wolter1_scratch/WaveDiff/celeba_256/*.jpg"
+    )
+    ddgan = glob(
+        "/p/scratch/holistic-vid-westai/wolter1_scratch/DDGAN/celeba_256/*.jpg"
+    )
+    stylegan2 = glob(
+        "/p/scratch/holistic-vid-westai/wolter1_scratch/StyleGAN2/samples_celeba/*.png"
+    )
 
-    def compute_packets(file_list, batch_size = 1000, wavelet=wavelet):
-        my_process = partial(process, paths=natural_path, wavelet=wavelet, level=level, log_scale=False)
+    def compute_packets(file_list, batch_size=1000, wavelet=wavelet):
+        my_process = partial(
+            process, paths=natural_path, wavelet=wavelet, level=level, log_scale=False
+        )
 
-        image_tensor = get_images(file_list).permute(0, 3, 1, 2)/255.
-        print(f'image_tensor shape {image_tensor.shape}')
+        image_tensor = get_images(file_list).permute(0, 3, 1, 2) / 255.0
+        print(f"image_tensor shape {image_tensor.shape}")
         packets = []
         tensor_list = torch.split(image_tensor, batch_size)
         for tensor in tqdm(tensor_list):
@@ -162,102 +183,168 @@ def plot_freq_celebA():
         return packets
 
     original_packets = compute_packets(original_images)
-    packet_image = np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(original_packets.numpy()), axis=(0, 2)), 4) + 1e-24)
+    packet_image = np.log(
+        generate_frequency_packet_image(
+            np.mean(compute_power_spectrum(original_packets.numpy()), axis=(0, 2)), 4
+        )
+        + 1e-24
+    )
     plt.imshow(packet_image)
-    plt.savefig(f'orig_packets_{wavelet}.pdf')
+    plt.savefig(f"orig_packets_{wavelet}.pdf")
     plt.clf()
-    mean_power_celeba = np.mean(compute_power_spectrum(original_packets.numpy()), axis=(0, 2, 3, 4))
-    print('gt packets done.')
+    mean_power_celeba = np.mean(
+        compute_power_spectrum(original_packets.numpy()), axis=(0, 2, 3, 4)
+    )
+    print("gt packets done.")
 
     styleswin_packets = compute_packets(styleswin_images)
-    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(styleswin_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
-    plt.savefig(f'styleswin_packets_{wavelet}.pdf')
+    plt.imshow(
+        np.log(
+            generate_frequency_packet_image(
+                np.mean(compute_power_spectrum(styleswin_packets.numpy()), axis=(0, 2)),
+                4,
+            )
+            + 1e-24
+        )
+    )
+    plt.savefig(f"styleswin_packets_{wavelet}.pdf")
     plt.clf()
-    mean_power_styleswin = np.mean(compute_power_spectrum(styleswin_packets.numpy()), axis=(0, 2, 3, 4))
-    print('styleswin packets done.')
+    mean_power_styleswin = np.mean(
+        compute_power_spectrum(styleswin_packets.numpy()), axis=(0, 2, 3, 4)
+    )
+    print("styleswin packets done.")
 
     ddpm_packets = compute_packets(ddpm_images)
-    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(ddpm_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
-    plt.savefig(f'ddpm_packets_{wavelet}.pdf')
+    plt.imshow(
+        np.log(
+            generate_frequency_packet_image(
+                np.mean(compute_power_spectrum(ddpm_packets.numpy()), axis=(0, 2)), 4
+            )
+            + 1e-24
+        )
+    )
+    plt.savefig(f"ddpm_packets_{wavelet}.pdf")
     plt.clf()
-    mean_power_ddpm = np.mean(compute_power_spectrum(ddpm_packets.numpy()), axis=(0, 2, 3, 4))
-    print('ddpm packets done.')
+    mean_power_ddpm = np.mean(
+        compute_power_spectrum(ddpm_packets.numpy()), axis=(0, 2, 3, 4)
+    )
+    print("ddpm packets done.")
 
-    
     ddim_packets = compute_packets(ddim_images)
-    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(ddim_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
-    plt.savefig(f'ddim_packets_{wavelet}.pdf')
+    plt.imshow(
+        np.log(
+            generate_frequency_packet_image(
+                np.mean(compute_power_spectrum(ddim_packets.numpy()), axis=(0, 2)), 4
+            )
+            + 1e-24
+        )
+    )
+    plt.savefig(f"ddim_packets_{wavelet}.pdf")
     plt.clf()
-    mean_power_ddim = np.mean(compute_power_spectrum(ddim_packets.numpy()), axis=(0, 2, 3, 4))
-    print('ddim packets done.')
+    mean_power_ddim = np.mean(
+        compute_power_spectrum(ddim_packets.numpy()), axis=(0, 2, 3, 4)
+    )
+    print("ddim packets done.")
     del ddim_packets
 
     wave_diff_packets = compute_packets(wavediff)
-    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(wave_diff_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
-    plt.savefig(f'wave_diff_packets_{wavelet}.pdf')
+    plt.imshow(
+        np.log(
+            generate_frequency_packet_image(
+                np.mean(compute_power_spectrum(wave_diff_packets.numpy()), axis=(0, 2)),
+                4,
+            )
+            + 1e-24
+        )
+    )
+    plt.savefig(f"wave_diff_packets_{wavelet}.pdf")
     plt.clf()
-    mean_power_wavediff = np.mean(compute_power_spectrum(wave_diff_packets.numpy()), axis=(0, 2, 3, 4))
+    mean_power_wavediff = np.mean(
+        compute_power_spectrum(wave_diff_packets.numpy()), axis=(0, 2, 3, 4)
+    )
     del wave_diff_packets
-    print('wave_diff_packets done.')
+    print("wave_diff_packets done.")
 
     ddgan_packets = compute_packets(ddgan)
-    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(ddgan_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
-    plt.savefig(f'ddgan_packets_{wavelet}.pdf')
+    plt.imshow(
+        np.log(
+            generate_frequency_packet_image(
+                np.mean(compute_power_spectrum(ddgan_packets.numpy()), axis=(0, 2)), 4
+            )
+            + 1e-24
+        )
+    )
+    plt.savefig(f"ddgan_packets_{wavelet}.pdf")
     plt.clf()
 
-    mean_power_ddgan = np.mean(compute_power_spectrum(ddgan_packets.numpy()), axis=(0, 2, 3, 4))
+    mean_power_ddgan = np.mean(
+        compute_power_spectrum(ddgan_packets.numpy()), axis=(0, 2, 3, 4)
+    )
     del ddgan_packets
 
-    print('ddgan_packets done.')
+    print("ddgan_packets done.")
 
     stylegan2_packets = compute_packets(stylegan2)
-    plt.imshow(np.log(generate_frequency_packet_image(np.mean(compute_power_spectrum(stylegan2_packets.numpy()), axis=(0, 2)), 4) + 1e-24))
-    plt.savefig(f'stylegan2_packets_{wavelet}.pdf')
+    plt.imshow(
+        np.log(
+            generate_frequency_packet_image(
+                np.mean(compute_power_spectrum(stylegan2_packets.numpy()), axis=(0, 2)),
+                4,
+            )
+            + 1e-24
+        )
+    )
+    plt.savefig(f"stylegan2_packets_{wavelet}.pdf")
     plt.clf()
-    mean_power_stylegan2 = np.mean(compute_power_spectrum(stylegan2_packets.numpy()), axis=(0, 2, 3, 4))
+    mean_power_stylegan2 = np.mean(
+        compute_power_spectrum(stylegan2_packets.numpy()), axis=(0, 2, 3, 4)
+    )
     del stylegan2_packets
-    print('stylegan2_packets done.')
-
+    print("stylegan2_packets done.")
 
     plt.clf()
-    plt.semilogy(mean_power_celeba, label='celebAHQ')
-    plt.semilogy(mean_power_ddpm, '.-', label='DDPM')
-    plt.semilogy(mean_power_ddim, '.-', label='DDIM')
-    plt.semilogy(mean_power_styleswin, '.-', label='Styleswin')
-    plt.semilogy(mean_power_wavediff, '.-', label='wavediff')
-    plt.semilogy(mean_power_ddgan, '.-', label='ddgan')
-    plt.semilogy(mean_power_stylegan2, '.-', label='stylegan2')
+    plt.semilogy(mean_power_celeba, label="celebAHQ")
+    plt.semilogy(mean_power_ddpm, ".-", label="DDPM")
+    plt.semilogy(mean_power_ddim, ".-", label="DDIM")
+    plt.semilogy(mean_power_styleswin, ".-", label="Styleswin")
+    plt.semilogy(mean_power_wavediff, ".-", label="wavediff")
+    plt.semilogy(mean_power_ddgan, ".-", label="ddgan")
+    plt.semilogy(mean_power_stylegan2, ".-", label="stylegan2")
     plt.legend()
-    plt.savefig(f'packetplot_{wavelet}.pdf');
+    plt.savefig(f"packetplot_{wavelet}.pdf")
 
     diff = lambda mpower: np.abs(mean_power_celeba - mpower)
 
     plt.clf()
-    plt.semilogy(diff(mean_power_ddpm), '.-', label='DDPM')
-    plt.semilogy(diff(mean_power_ddim), '.-', label='DDIM')
-    plt.semilogy(diff(mean_power_styleswin), '.-', label='Styleswin')
-    plt.semilogy(diff(mean_power_wavediff), '.-', label='wavediff')
-    plt.semilogy(diff(mean_power_ddgan), '.-', label='ddgan')
-    plt.semilogy(diff(mean_power_stylegan2), '.-', label='stylegan2')
-    
+    plt.semilogy(diff(mean_power_ddpm), ".-", label="DDPM")
+    plt.semilogy(diff(mean_power_ddim), ".-", label="DDIM")
+    plt.semilogy(diff(mean_power_styleswin), ".-", label="Styleswin")
+    plt.semilogy(diff(mean_power_wavediff), ".-", label="wavediff")
+    plt.semilogy(diff(mean_power_ddgan), ".-", label="ddgan")
+    plt.semilogy(diff(mean_power_stylegan2), ".-", label="stylegan2")
+
     plt.legend()
-    plt.savefig(f'diff_packetplot_{wavelet}.pdf');
+    plt.savefig(f"diff_packetplot_{wavelet}.pdf")
 
     breakpoint()
 
-    plt.semilogy(mean_power_celeba, label='celebAHQ')
-    plt.semilogy(mean_power_ddpm, '.-', label='DDPM')
-    plt.semilogy(mean_power_stylegan2, '.-', label='stylegan2')
-    tikz.save(f'packetplot_celebAHQ_DDPM__stylegan2_{wavelet}.tex', standalone=True)
-    plt.savefig(f'packetplot_celebAHQ_DDPM__stylegan2_{wavelet}.pdf');
-    
+    plt.semilogy(mean_power_celeba, label="celebAHQ")
+    plt.semilogy(mean_power_ddpm, ".-", label="DDPM")
+    plt.semilogy(mean_power_stylegan2, ".-", label="stylegan2")
+    tikz.save(f"packetplot_celebAHQ_DDPM__stylegan2_{wavelet}.tex", standalone=True)
+    plt.savefig(f"packetplot_celebAHQ_DDPM__stylegan2_{wavelet}.pdf")
 
-    plt.imshow(generate_frequency_packet_image(np.abs(compute_power_spectrum(original_packets.numpy()))
-               - generate_frequency_packet_image(compute_power_spectrum(ddpm_packets.numpy()))))
-    plt.savefig(f'diff_packetimage_{wavelet}'.pdf)
+    plt.imshow(
+        generate_frequency_packet_image(
+            np.abs(compute_power_spectrum(original_packets.numpy()))
+            - generate_frequency_packet_image(
+                compute_power_spectrum(ddpm_packets.numpy())
+            )
+        )
+    )
+    plt.savefig(f"diff_packetimage_{wavelet}".pdf)
 
-    print('done')
-
+    print("done")
 
     breakpoint()
 
@@ -272,25 +359,31 @@ def main_tuned():
     global original_path, sample_path_wave, level, wvlt, sample_path_mse
     freq_path, natural_path = get_freq_order(level=level)
     # Read and preprocess image
-    print('Loading and computing packets for the original dataset')
+    print("Loading and computing packets for the original dataset")
     original_tensor = get_images(original_path)
     original_tensor = original_tensor.permute(0, 3, 1, 2)
-    original_tensor = original_tensor/255.
-    original_packets = process(original_tensor, freq_path, wavelet=wvlt, level=level, log_scale=False)
+    original_tensor = original_tensor / 255.0
+    original_packets = process(
+        original_tensor, freq_path, wavelet=wvlt, level=level, log_scale=False
+    )
     del original_tensor
-    
+
     print("Loading and computing packets for Wavelet loss trained dataset")
     wave_tensor = get_images(sample_path_wave)
     wave_tensor = wave_tensor.permute(0, 3, 1, 2)
-    wave_tensor = wave_tensor/255.
-    wave_packets = process(wave_tensor, freq_path, wavelet=wvlt, level=level, log_scale=False)
+    wave_tensor = wave_tensor / 255.0
+    wave_packets = process(
+        wave_tensor, freq_path, wavelet=wvlt, level=level, log_scale=False
+    )
     del wave_tensor
 
     print("Loading and computing packets for mse loss trained dataset")
     mse_tensor = get_images(sample_path_mse)
     mse_tensor = mse_tensor.permute(0, 3, 1, 2)
-    mse_tensor = mse_tensor/255.
-    mse_packets = process(mse_tensor, freq_path, wavelet=wvlt, level=level, log_scale=False)
+    mse_tensor = mse_tensor / 255.0
+    mse_packets = process(
+        mse_tensor, freq_path, wavelet=wvlt, level=level, log_scale=False
+    )
     del mse_tensor
 
     # original_packets = original_packets / (torch.amax(torch.abs(original_packets), dim=(0, 2, 3, 4))+1e-12)
@@ -303,9 +396,9 @@ def main_tuned():
 
     mean_a = mean_packets_original - mean_packets_mse
     mean_b = mean_packets_original - mean_packets_wave
-    mean_a = torch.abs(mean_a*mean_a)
+    mean_a = torch.abs(mean_a * mean_a)
     mean_b = torch.abs(mean_b**2)
-    
+
     # mean_packets_mse = mean_packets_mse / torch.amax(torch.abs(mean_packets_mse), dim=(1, 2), keepdim=True)
     # mean_packets_wave = mean_packets_wave / torch.amax(torch.abs(mean_packets_wave), dim=(1, 2), keepdim=True)
     # mean_packets_original = mean_packets_original / torch.amax(torch.abs(mean_packets_original), dim=(1, 2), keepdim=True)
@@ -314,7 +407,7 @@ def main_tuned():
     plot_real = generate_frequency_packet_image(mean_packets_original, level)
     plot_mse = generate_frequency_packet_image(mean_packets_mse, level)
     plot_wave = generate_frequency_packet_image(mean_packets_wave, level)
-    fig = plt.figure(figsize=(9,3))
+    fig = plt.figure(figsize=(9, 3))
     fig.add_subplot(1, 3, 1)
     plt.imshow(plot_real, vmax=1, vmin=-1)
     plt.title("real")
@@ -336,7 +429,7 @@ def main_tuned():
     plt.show()
     # # plt.savefig(f'./packet_plots/mean_packets_{wvlt}_all.png', dpi=600, bbox_inches='tight')
     # # plt.close()
-    
+
     # # # Tikzplot save
     # fig = plt.gcf()
     # tikz.save('./freq_plots/mean_packet_representation.tex', standalone=True)
@@ -345,11 +438,11 @@ def main_tuned():
     # plt.close()
 
     # Generate mean packets magnitude plots
-    plt.semilogy(torch.mean(mean_a, (-2, -1)).flatten().numpy(), label='real-mse')
-    plt.semilogy(torch.mean(mean_b, (-2, -1)).flatten().numpy(), label='real-wave')
+    plt.semilogy(torch.mean(mean_a, (-2, -1)).flatten().numpy(), label="real-mse")
+    plt.semilogy(torch.mean(mean_b, (-2, -1)).flatten().numpy(), label="real-wave")
     # plt.plot(torch.mean(mean_packets_wave, (-2, -1)).flatten().numpy(), label='packet')
-    plt.xlabel('mean packets')
-    plt.ylabel('magnitude')
+    plt.xlabel("mean packets")
+    plt.ylabel("magnitude")
     plt.grid()
     plt.legend()
     # fig = plt.gcf()
@@ -360,7 +453,8 @@ def main_tuned():
     # plt.close()
     plt.show()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     plot_freq_celebA()
     # img_nms = glob('./packet_plots/packet_*.png')
     # nms = []

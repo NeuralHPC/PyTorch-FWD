@@ -1,15 +1,12 @@
+"""Wavelet utils."""
+
 from itertools import product
-from typing import Tuple
-from functools import partial
+from typing import Optional
 
 import numpy as np
 import ptwt
 import pywt
 import torch
-import torch.nn.functional as F
-import matplotlib.pyplot as plt
-from copy import deepcopy
-from tqdm import tqdm
 from scipy import linalg
 
 
@@ -74,15 +71,26 @@ def forward_wavelet_packet_transform(
     max_level: int,
     log_scale: bool,
 ) -> torch.Tensor:
+    """Compute wavelet packet transform.
+
+    Args:
+        tensor (torch.Tensor): Input torch tensor
+        wavelet (str): Choice of wavelet
+        max_level (int): Level of decomposition
+        log_scale (bool): Log scale boolean
+
+    Returns:
+        torch.Tensor: Packets
+    """
     # ideally the output dtype should depend in the input.
     # tensor = tensor.type(torch.FloatTensor)
     packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=max_level)
     packet_list = [packets[node] for node in packets.get_natural_order(max_level)]
 
     # for node in packets.get_natural_order(max_level):
-        # packet = torch.squeeze(packets[node], dim=1)
-        # packet_list.append(packets[node])
-    wp_pt_rs = torch.stack(packet_list, axis=1)
+    # packet = torch.squeeze(packets[node], dim=1)
+    # packet_list.append(packets[node])
+    wp_pt_rs = torch.stack(packet_list, dim=1)
     if log_scale:
         wp_pt_rs = torch.log(torch.abs(wp_pt_rs) + 1e-6)
 
@@ -91,6 +99,7 @@ def forward_wavelet_packet_transform(
 
 def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
     """Create a ready-to-polt image with frequency-order packages.
+
        Given a packet array in natural order, creat an image which is
        ready to plot in frequency order.
     Args:
@@ -114,91 +123,110 @@ def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
     return np.concatenate(image, 2)
 
 
-# def compute_kl_divergence(output: torch.Tensor, target: torch.Tensor, eps: float = 1e-30) -> torch.Tensor:
-#     """Compute KL Divergence
+def compute_kl_divergence(
+    output: torch.Tensor, target: torch.Tensor, eps: Optional[float] = 1e-30
+) -> torch.Tensor:
+    """Compute KL Divergence.
 
-#     Args:
-#         output (torch.Tensor): Output Images
-#         target (torch.Tensor): Target Images
-#         eps (float, optional): Epsilon. Defaults to 1e-12.
+    Args:
+        output (torch.Tensor): Output Images
+        target (torch.Tensor): Target Images
+        eps (float, optional): Epsilon. Defaults to 1e-12.
 
-#     Returns:
-#         torch.Tensor: KL Divergence value
-#     """
-#     # Tried with eps 1e-30 and this improves the precision by a small margin but overall ranking remains the same
-#     return target * torch.log((target / (output + eps)) + eps)
+    Returns:
+        torch.Tensor: KL Divergence value
+    """
+    # Tried with eps 1e-30 and this improves the precision by a small margin but overall ranking remains the same
+    return target * torch.log((target / (output + eps)) + eps)
 
 
-# def wavelet_packet_power_divergence(
-#     output: torch.Tensor, target: torch.Tensor, level: int, wavelet: str, log_scale: bool) -> torch.Tensor:
-#     """Compute the wavelet packet power divergence.
+def wavelet_packet_power_divergence(
+    output: torch.Tensor,
+    target: torch.Tensor,
+    level: int,
+    wavelet: str,
+    log_scale: bool,
+) -> torch.Tensor:
+    """Compute the wavelet packet power divergence.
 
-#     Daubechies wavelets are orthogonal, see Ripples in Mathematics page 129:
-#     ""
-#     For orthogonal trans-
-#     forms (such as those in the Daubechies family) the number of extra signal
-#     coefficients is exactly L - 2, with L being the filter length. See p. 135 for the
-#     proof.
-#     ""
-#     Orthogonal transforms conserve energy according
-#     Proposition 7.7.1 from Ripples in Mathematics page 80.
+    Daubechies wavelets are orthogonal, see Ripples in Mathematics page 129:
+    ""
+    For orthogonal trans-
+    forms (such as those in the Daubechies family) the number of extra signal
+    coefficients is exactly L - 2, with L being the filter length. See p. 135 for the
+    proof.
+    ""
+    Orthogonal transforms conserve energy according
+    Proposition 7.7.1 from Ripples in Mathematics page 80.
 
-#     Args:
-#         output (torch.Tensor): The network output
-#         target (torch.Tensor): The target image
-#         level  (int): Wavelet level to use. Defaults to 3
-#         wavelet(str): Type of wavelet to use. Defaults to sym5 
+    Args:
+        output (torch.Tensor): The network output
+        target (torch.Tensor): The target image
+        level  (int): Wavelet level to use. Defaults to 3
+        wavelet(str): Type of wavelet to use. Defaults to sym5
 
-#     Returns:
-#         torch.Tensor: Wavelet power divergence metric
-#     """
-#     assert output.shape == target.shape, "Sampled and reference images should have same shape."
-    
-#     output_packets = batched_packet_transform(output, max_level=level, wavelet=wavelet, log_scale=log_scale, batch_size=2500)
-#     target_packets = batched_packet_transform(target, max_level=level, wavelet=wavelet, log_scale=log_scale, batch_size=2500)
+    Returns:
+        torch.Tensor: Wavelet power divergence metric
+    """
+    assert (
+        output.shape == target.shape
+    ), "Sampled and reference images should have same shape."
 
-#     B, P, C, H, W = output_packets.shape
-#     output_packets = torch.reshape(output_packets, (B, P, C, H*W))
-#     target_packets = torch.reshape(target_packets, (B, P, C, H*W))
+    output_packets = forward_wavelet_packet_transform(
+        output, max_level=level, wavelet=wavelet, log_scale=log_scale
+    )
+    target_packets = forward_wavelet_packet_transform(
+        target, max_level=level, wavelet=wavelet, log_scale=log_scale
+    )
 
-#     B, P, C, Px = output_packets.shape
-#     assert output_packets.shape == target_packets.shape, "Reshape shapes are not same."
+    B, P, C, H, W = output_packets.shape
+    output_packets = torch.reshape(output_packets, (B, P, C, H * W))
+    target_packets = torch.reshape(target_packets, (B, P, C, H * W))
 
-#     p_tar_hists = []
-#     p_out_hists = []
-#     for pindex in range(P):
-#         c_tar_hists = []
-#         c_out_hists = []
-#         for cindex in range(C):
-#             op_pack = output_packets[:, pindex, cindex, :].flatten()
-#             tg_pack = target_packets[:, pindex, cindex, :].flatten()
-#             max_val = torch.max(torch.max(torch.abs(op_pack)), torch.max(torch.abs(tg_pack)))
-#             max_val = 1e-12 if max_val == 0 else max_val
-#             op_pack = op_pack / max_val
-#             tg_pack = tg_pack / max_val
-#             output_hist, _ = torch.histogram(op_pack, bins=int((B*Px)**0.5), range=(-1, 1))
-#             target_hist, _ = torch.histogram(tg_pack, bins=int((B*Px)**0.5), range=(-1, 1))
-#             c_tar_hists.append(target_hist)
-#             c_out_hists.append(output_hist)
-#         p_tar_hists.append(torch.stack(c_tar_hists))
-#         p_out_hists.append(torch.stack(c_out_hists))
-            
-#     output_hist = torch.stack(p_out_hists)
-#     target_hist = torch.stack(p_tar_hists)
+    B, P, C, Px = output_packets.shape
+    assert output_packets.shape == target_packets.shape, "Reshape shapes are not same."
 
-#     # output_hist = torch.nn.functional.softmax(output_hist)
-#     # target_hist = torch.nn.functional.softmax(target_hist)
-#     output_hist = output_hist / (torch.sum(output_hist, dim=-1, keepdim=True) + 1e-12)
-#     target_hist = target_hist / (torch.sum(target_hist, dim=-1, keepdim=True) + 1e-12)
+    p_tar_hists = []
+    p_out_hists = []
+    for pindex in range(P):
+        c_tar_hists = []
+        c_out_hists = []
+        for cindex in range(C):
+            op_pack = output_packets[:, pindex, cindex, :].flatten()
+            tg_pack = target_packets[:, pindex, cindex, :].flatten()
+            max_val = torch.max(
+                torch.max(torch.abs(op_pack)), torch.max(torch.abs(tg_pack))
+            )
+            max_val = 1e-12 if max_val == 0 else max_val
+            op_pack = op_pack / max_val
+            tg_pack = tg_pack / max_val
+            output_hist, _ = torch.histogram(
+                op_pack, bins=int((B * Px) ** 0.5), range=(-1, 1)
+            )
+            target_hist, _ = torch.histogram(
+                tg_pack, bins=int((B * Px) ** 0.5), range=(-1, 1)
+            )
+            c_tar_hists.append(target_hist)
+            c_out_hists.append(output_hist)
+        p_tar_hists.append(torch.stack(c_tar_hists))
+        p_out_hists.append(torch.stack(c_out_hists))
 
-#     kld_ab = compute_kl_divergence(output_hist, target_hist)
-#     kld_ba = compute_kl_divergence(target_hist, output_hist)
-#     kld = 0.5 * (kld_ab + kld_ba)
-#     return torch.mean(kld).item() # Average kldivergence across packets and channels
+    output_hist = torch.stack(p_out_hists)
+    target_hist = torch.stack(p_tar_hists)
+
+    # output_hist = torch.nn.functional.softmax(output_hist)
+    # target_hist = torch.nn.functional.softmax(target_hist)
+    output_hist = output_hist / (torch.sum(output_hist, dim=-1, keepdim=True) + 1e-12)
+    target_hist = target_hist / (torch.sum(target_hist, dim=-1, keepdim=True) + 1e-12)
+
+    kld_ab = compute_kl_divergence(output_hist, target_hist)
+    kld_ba = compute_kl_divergence(target_hist, output_hist)
+    kld = 0.5 * (kld_ab + kld_ba)
+    return torch.mean(kld).item()  # Average kldivergence across packets and channels
 
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
-    """Implementation from https://github.com/bioinf-jku/TTUR/blob/master/fid.py.
+    """Frechet Distance Implementation from https://github.com/bioinf-jku/TTUR/blob/master/fid.py.
 
     Numpy implementation of the Frechet Distance.
     The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
@@ -217,6 +245,9 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     -- sigma2: The covariance matrix over activations, precalculated on an
                representative data set.
 
+    Raises:
+        ValueError: Value error if imaginary component has large value.
+
     Returns:
     --   : The Frechet Distance.
     """
@@ -226,18 +257,22 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     sigma1 = np.atleast_2d(sigma1)
     sigma2 = np.atleast_2d(sigma2)
 
-    assert mu1.shape == mu2.shape, \
-        'Training and test mean vectors have different lengths'
-    assert sigma1.shape == sigma2.shape, \
-        'Training and test covariances have different dimensions'
+    assert (
+        mu1.shape == mu2.shape
+    ), "Training and test mean vectors have different lengths"
+    assert (
+        sigma1.shape == sigma2.shape
+    ), "Training and test covariances have different dimensions"
 
     diff = mu1 - mu2
 
     # Product might be almost singular
     covmean = linalg.sqrtm(sigma1.dot(sigma2))
     if not np.isfinite(covmean).all():
-        msg = ('fid calculation produces singular product; '
-               'adding %s to diagonal of cov estimates') % eps
+        msg = (
+            "fid calculation produces singular product; "
+            "adding %s to diagonal of cov estimates"
+        ) % eps
         print(msg)
         offset = np.eye(sigma1.shape[0]) * eps
         covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
@@ -246,10 +281,9 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     if np.iscomplexobj(covmean):
         if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
             m = np.max(np.abs(covmean.imag))
-            raise ValueError('Imaginary component {}'.format(m))
+            raise ValueError("Imaginary component {}".format(m))
         covmean = covmean.real
 
     tr_covmean = np.trace(covmean)
 
-    return (diff.dot(diff) + np.trace(sigma1)
-            + np.trace(sigma2) - 2 * tr_covmean)
+    return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
