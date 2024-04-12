@@ -3,11 +3,13 @@
 from itertools import product
 from typing import Optional
 
+import matplotlib.pyplot as plt
 import numpy as np
 import ptwt
 import pywt
 import torch
 from scipy import linalg
+from tqdm import tqdm
 
 
 def get_freq_order(level: int):
