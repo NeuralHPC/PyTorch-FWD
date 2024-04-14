@@ -3,13 +3,11 @@
 from itertools import product
 from typing import Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import ptwt
 import pywt
 import torch
 from scipy import linalg
-from tqdm import tqdm
 
 
 def get_freq_order(level: int):
@@ -148,7 +146,7 @@ def wavelet_packet_power_divergence(
     level: int,
     wavelet: str,
     log_scale: bool,
-) -> torch.Tensor:
+) -> float:
     """Compute the wavelet packet power divergence.
 
     Daubechies wavelets are orthogonal, see Ripples in Mathematics page 129:
@@ -168,7 +166,7 @@ def wavelet_packet_power_divergence(
         wavelet(str): Type of wavelet to use. Defaults to sym5
 
     Returns:
-        torch.Tensor: Wavelet power divergence metric
+        float: Wavelet power divergence metric
     """
     assert (
         output.shape == target.shape
@@ -199,7 +197,7 @@ def wavelet_packet_power_divergence(
             max_val = torch.max(
                 torch.max(torch.abs(op_pack)), torch.max(torch.abs(tg_pack))
             )
-            max_val = 1e-12 if max_val == 0 else max_val
+            max_val = torch.Tensor(1e-12) if max_val == 0 else max_val
             op_pack = op_pack / max_val
             tg_pack = tg_pack / max_val
             output_hist, _ = torch.histogram(
@@ -224,7 +222,9 @@ def wavelet_packet_power_divergence(
     kld_ab = compute_kl_divergence(output_hist, target_hist)
     kld_ba = compute_kl_divergence(target_hist, output_hist)
     kld = 0.5 * (kld_ab + kld_ba)
-    return torch.mean(kld).item()  # Average kldivergence across packets and channels
+    return float(
+        torch.mean(kld).item()
+    )  # Average kldivergence across packets and channels
 
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):

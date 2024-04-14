@@ -70,7 +70,7 @@ class ImagePathDataset(th.utils.data.Dataset):
 
 def compute_packet_statistics(
     dataloader: th.utils.data.DataLoader, wavelet: str, max_level: int, log_scale: bool
-) -> th.Tensor:
+) -> Tuple[np.ndarray, ...]:
     """Compute wavelet packet transform across batches.
 
     Args:
@@ -80,7 +80,7 @@ def compute_packet_statistics(
         log_scale (bool): Apply log scale.
 
     Returns:
-        th.Tensor: Packets of shape [BS, P, C, H_n, W_n].
+        Tuple[np.ndarray, ...]: Mean and sigma for each packet.
     """
     packets = []
     device = th.device("cuda:0") if th.cuda.is_available() else th.device("cpu")
@@ -129,9 +129,9 @@ def calculate_path_statistics(
             mu = fp["mu"][:]
             sigma = fp["sigma"][:]
     else:
-        path = pathlib.Path(path)
+        posfix_path = pathlib.Path(path)
         img_names = sorted(
-            [name for ext in IMAGE_EXTS for name in path.glob(f"*.{ext}")]
+            [name for ext in IMAGE_EXTS for name in posfix_path.glob(f"*.{ext}")]
         )
         dataloader = th.utils.data.DataLoader(
             ImagePathDataset(img_names, transforms=tv.ToTensor()),
