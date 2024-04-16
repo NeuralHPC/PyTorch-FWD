@@ -33,8 +33,8 @@ def get_images(img_size: int = 64) -> th.Tensor:
 
     """
     dataset = load_sample_images()
-    tower = th.Tensor(dataset.images[0])
-    flower = th.Tensor(dataset.images[1])
+    tower = th.Tensor(deepcopy(dataset.images[0]))
+    flower = th.Tensor(deepcopy(dataset.images[1]))
     images = th.stack([tower, tower, tower, tower, flower, flower, flower, flower], axis=0)
     images = images/255.0
     images = th.permute(images, [0, 3, 1, 2])

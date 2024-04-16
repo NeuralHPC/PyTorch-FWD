@@ -1,9 +1,9 @@
 pillow
 matplotlib
-torch
 scipy==1.11.1
 numpy
 scikit-learn
+torch==2.0
 torchvision
 PyWavelets
 ptwt

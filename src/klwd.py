@@ -70,7 +70,7 @@ def compute_packets(
     return packet_tensor
 
 
-@th.compile(mode="max-autotune")
+# @th.compile(mode="max-autotune")
 def wavelet_power_divergence(packets_0: th.Tensor, packets_1: th.Tensor) -> float:
     """Compute Wavelet Power Divergence.
 
