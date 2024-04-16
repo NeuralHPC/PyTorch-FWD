@@ -11,14 +11,12 @@ from src.freq_math import (
     generate_frequency_packet_image,
     forward_wavelet_packet_transform
 )
-from .test_wavelet_frechet_distance import get_images
 
 
 @pytest.mark.slow
 def test_loss():
     import scipy.datasets
-    import matplotlib.pyplot as plt
-
+ 
     face = th.Tensor(scipy.datasets.face())
     face = th.stack([face, face, face, face], axis=0)
     face = face.type(th.FloatTensor) / 255.0
