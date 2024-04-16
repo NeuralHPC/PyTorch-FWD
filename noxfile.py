@@ -27,7 +27,7 @@ def lint(session):
         "pydocstyle",
         "darglint",
     )
-    session.run("flake8", "src", "noxfile.py")
+    session.run("flake8", "src", "tests", "noxfile.py")
 
 
 @nox.session(name="typing")
