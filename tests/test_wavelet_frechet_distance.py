@@ -1,6 +1,6 @@
 """Test Wavelet packet Frechet distance."""
 import pytest
-import torch
+import torch as th
 import pytest
 import numpy as np
 
@@ -10,10 +10,10 @@ from sklearn.datasets import load_sample_images
 from torchvision import transforms
 from copy import deepcopy
 
-torch.set_default_dtype(torch.float64)
-torch.use_deterministic_algorithms(True)
+th.set_default_dtype(th.float64)
+th.use_deterministic_algorithms(True)
 
-make_dataloader = lambda x: torch.utils.data.DataLoader(torch.utils.data.TensorDataset(x), batch_size=1, shuffle=False, drop_last=False)
+make_dataloader = lambda x: th.utils.data.DataLoader(th.utils.data.TensorDataset(x), batch_size=1, shuffle=False, drop_last=False)
 default_params = {
     'dataloader': None,
     'wavelet': 'sym5',
@@ -22,22 +22,22 @@ default_params = {
 }
 
 @pytest.mark.slow
-def get_images(img_size: int = 64) -> torch.Tensor:
+def get_images(img_size: int = 64) -> th.Tensor:
     """Generate images of given size.
 
     Args:
         img_size (int): Integer specifying the desired image size.
 
     Returns:
-        torch.Tensor: Tensor containing images of shape [batchsize, channels, height, width].
+        th.Tensor: Tensor containing images of shape [batchsize, channels, height, width].
 
     """
     dataset = load_sample_images()
-    tower = torch.Tensor(dataset.images[0])
-    flower = torch.Tensor(dataset.images[1])
-    images = torch.stack([tower, tower, tower, tower, flower, flower, flower, flower], axis=0)
+    tower = th.Tensor(deepcopy(dataset.images[0]))
+    flower = th.Tensor(deepcopy(dataset.images[1]))
+    images = th.stack([tower, tower, tower, tower, flower, flower, flower, flower], axis=0)
     images = images/255.0
-    images = torch.permute(images, [0, 3, 1, 2])
+    images = th.permute(images, [0, 3, 1, 2])
     images = transforms.functional.resize(images, (img_size, img_size))
     assert images.shape == (8, 3, img_size, img_size)
     return images
@@ -66,9 +66,9 @@ def test_shuffle_input():
     target_images = get_images()
     # Shuffle the output images
     output_images = deepcopy(target_images)
-    permutation = torch.randperm(len(target_images))
+    permutation = th.randperm(len(target_images))
     shuffled_images = output_images[permutation, :, :, :]
-    assert not torch.allclose(shuffled_images, output_images)
+    assert not th.allclose(shuffled_images, output_images)
 
     shuffled_fwd = compute_fwd(target_images, shuffled_images)
     unshuffled_fwd = compute_fwd(target_images, output_images)
@@ -102,6 +102,7 @@ def test_various_image_sizes(img_size_level):
     
     fwd = compute_fwd(target_images, output_images)
     assert np.allclose(fwd, 0.0, atol=1e-3)
+
 
 @pytest.mark.slow
 def test_checkerboard_FWD():
@@ -145,7 +146,9 @@ def test_checkerboard_FWD():
     reference = images[0]
     default_params['max_level'] = 3
     for cimgs in images[1:]:
-        fwd = compute_fwd(target_images=torch.from_numpy(reference),
-                          output_images=torch.from_numpy(cimgs))
+        fwd = compute_fwd(target_images=th.from_numpy(reference),
+                          output_images=th.from_numpy(cimgs))
+        fwd_list.append(fwd)
 
     assert all(a < b for a, b in pairwise(fwd_list))
+
