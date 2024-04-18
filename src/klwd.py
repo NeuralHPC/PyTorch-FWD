@@ -87,7 +87,7 @@ def wavelet_power_divergence(packets_0: th.Tensor, packets_1: th.Tensor) -> floa
     packets_0 = th.reshape(packets_0, (Bs, P, C, H * W))
 
     def compute_hists(x):
-        return th.histogram(x, bins=int((Bs * H * W) ** 0.5), range=(-1, 1))
+        return th.histogram(x, bins=int(2*(Bs * H * W) ** (1/3)), range=(-1, 1), density=True) # Use rice rule for number of bins
 
     def normalize_fn(x):
         return x / (th.sum(x, dim=-1, keepdim=True) + 1e-12)
@@ -108,13 +108,18 @@ def wavelet_power_divergence(packets_0: th.Tensor, packets_1: th.Tensor) -> floa
         p_0_hists.append(th.stack(c_0_hists))
         p_1_hists.append(th.stack(c_1_hists))
 
-    p0_hist = normalize_fn(th.stack(p_0_hists))
-    p1_hist = normalize_fn(th.stack(p_1_hists))
+    # p0_hist = normalize_fn(th.stack(p_0_hists))
+    # p1_hist = normalize_fn(th.stack(p_1_hists))
+    p0_hist = th.stack(p_0_hists)
+    p1_hist = th.stack(p_1_hists)
 
-    kld_ab = compute_kl_divergence(p0_hist, p1_hist)
-    kld_ba = compute_kl_divergence(p1_hist, p0_hist)
-    kld = 0.5 * (kld_ab + kld_ba)
-    return float(th.mean(kld).item())  # Avg KLD over packets and channels.
+    packet_kld = []
+    for idx in tqdm(range(len(p0_hist))):
+        kld_ab = compute_kl_divergence(p0_hist[idx, :, :], p1_hist[idx, :, :])
+        kld_ba = compute_kl_divergence(p1_hist[idx, :, :], p0_hist[idx, :, :])
+        kld = 0.5 * (kld_ab + kld_ba)
+        packet_kld.append(float(th.mean(kld).item()))
+    return sum(packet_kld)/len(packet_kld)  # Avg KLD over packets
 
 
 def compute_klwd(

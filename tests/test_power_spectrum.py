@@ -114,6 +114,7 @@ def test_checkerboard_power_KL():
 
     # a list for the wavelet frecet distances.
     wfd_list = []
+    default_params['max_level'] = 3
     reference = images[0]
     for cimgs in images[1:]:
         kwd = compute_klwd(target_images=th.from_numpy(reference),

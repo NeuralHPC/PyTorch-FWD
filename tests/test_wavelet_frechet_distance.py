@@ -112,7 +112,7 @@ def test_checkerboard_FWD():
     # tile_size = 10 # determines tile size
     images = []
 
-    for tile_size in [2, 10, 20]:
+    for tile_size in [2, 5, 10]:
     # generate random grid
     
         grid = np.meshgrid(np.arange(0,range_max), np.arange(0,range_max))
