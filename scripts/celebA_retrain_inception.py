@@ -71,10 +71,10 @@ class CelebADataset(Dataset):
 
 
     def __len__(self):
-        return len(self.annos_dict)
+        return len(self.annos_dict) - 1
 
     def __getitem__(self, index) -> torch.Tensor:
-        img_no_str = '0'*(6 - len(f"{index:d}")) + f"{index:d}"
+        img_no_str = '0'*(6 - len(f"{index + 1:d}")) + f"{index + 1:d}"
         img_path = f"{self.data_dir}/Img/img_align_celeba_png/{img_no_str}.png"
         with PIL.Image.open(img_path) as im:
             tensor = self.to_tensor(self.transforms(im))
@@ -89,27 +89,43 @@ if __name__ == "__main__":
     net = torchvision.models.Inception3()
     net.fc = nn.Linear(2048, 40)
     # pass
+    epochs = 20
     test_size = 128
     lr = 0.001
     comp_stats = True
 
     train_set, test_set = torch.utils.data.random_split(dataset, [len(dataset) - test_size, test_size])
 
-    train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
+    train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=128)
 
+    # net = nn.DataParallel(net.cuda())
     net = net.cuda()
     optimizer = optim.Adam(net.parameters(), lr=lr)
     cost = nn.BCEWithLogitsLoss()
 
     bar = tqdm.tqdm(train_loader)
 
-    for batch in bar:
-        x = batch['img'].cuda()
-        y = batch['anno'].cuda().type(torch.float32)
+    for e in range(epochs):
 
-        yhat = net(x).logits
+        for test_batch in test_loader:
+            yhat = net(test_batch['img'].cuda()).logits
+            yhat = torch.nn.functional.sigmoid(yhat)
+            acc = torch.mean(test_batch['anno'].cuda().type(torch.float32) - (yhat > 0.5).type(torch.float32) )
+            print(f"e, {e}, acc { acc.item():2.2f}")
 
-        cost_val = cost(yhat, y)
+        for batch in bar:
+            optimizer.zero_grad()
+            x = batch['img'].cuda()
+            y = batch['anno'].cuda().type(torch.float32)
 
-        bar.set_description(f"cost: {cost_val.item()}")
+            yhat = net(x).logits
+
+            cost_val = cost(yhat, y)
+
+            cost_val.backward()
+            optimizer.step()
+
+            bar.set_description(f"cost: {cost_val.item():2.2f}")
+
+
