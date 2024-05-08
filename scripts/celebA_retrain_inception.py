@@ -98,11 +98,11 @@ if __name__ == "__main__":
 
     train_set, test_set = torch.utils.data.random_split(dataset, [len(dataset) - test_size, test_size])
 
-    train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
+    train_loader = DataLoader(train_set, batch_size=128, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=128)
 
-    # net = nn.DataParallel(net.cuda())
-    net = net.cuda()
+    net = nn.DataParallel(net.cuda())
+    # net = net.cuda()
     optimizer = optim.Adam(net.parameters(), lr=lr)
     cost = nn.BCEWithLogitsLoss()
 
