@@ -74,7 +74,9 @@ class CelebADataset(Dataset):
         return len(self.annos_dict) - 1
 
     def __getitem__(self, index) -> torch.Tensor:
-        img_no_str = '0'*(6 - len(f"{index + 1:d}")) + f"{index + 1:d}"
+        # img 0 does not exist.
+        index = index + 1
+        img_no_str = '0'*(6 - len(f"{index:d}")) + f"{index:d}"
         img_path = f"{self.data_dir}/Img/img_align_celeba_png/{img_no_str}.png"
         with PIL.Image.open(img_path) as im:
             tensor = self.to_tensor(self.transforms(im))
@@ -112,7 +114,7 @@ if __name__ == "__main__":
             yhat = net(test_batch['img'].cuda()).logits
             yhat = torch.nn.functional.sigmoid(yhat)
             acc = torch.mean(test_batch['anno'].cuda().type(torch.float32) - (yhat > 0.5).type(torch.float32) )
-            print(f"e, {e}, acc { acc.item():2.2f}")
+            print(f"e, {e}, acc { acc.item():2.4f}")
 
         for batch in bar:
             optimizer.zero_grad()
