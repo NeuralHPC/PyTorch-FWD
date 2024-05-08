@@ -106,7 +106,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(net.parameters(), lr=lr)
     cost = nn.BCEWithLogitsLoss()
 
-    bar = tqdm.tqdm(train_loader)
+    
 
     for e in range(epochs):
 
@@ -116,6 +116,7 @@ if __name__ == "__main__":
             acc = torch.mean((test_batch['anno'].cuda() == (yhat > 0.9)).type(torch.float32) )
             print(f"e, {e}, acc { acc.item():2.4f}")
 
+        bar = tqdm.tqdm(train_loader)
         for batch in bar:
             optimizer.zero_grad()
             x = batch['img'].cuda()
