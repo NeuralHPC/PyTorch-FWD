@@ -98,11 +98,11 @@ if __name__ == "__main__":
 
     train_set, test_set = torch.utils.data.random_split(dataset, [len(dataset) - test_size, test_size])
 
-    train_loader = DataLoader(train_set, batch_size=128, shuffle=True)
+    train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=128)
 
-    net = nn.DataParallel(net.cuda())
-    # net = net.cuda()
+    # net = nn.DataParallel(net.cuda())
+    net = net.cuda()
     optimizer = optim.Adam(net.parameters(), lr=lr)
     cost = nn.BCEWithLogitsLoss()
 
@@ -113,7 +113,7 @@ if __name__ == "__main__":
         for test_batch in test_loader:
             yhat = net(test_batch['img'].cuda()).logits
             yhat = torch.nn.functional.sigmoid(yhat)
-            acc = torch.mean(test_batch['anno'].cuda().type(torch.float32) - (yhat > 0.5).type(torch.float32) )
+            acc = torch.mean(torch.abs(test_batch['anno'].cuda().type(torch.float32) - (yhat > 0.5).type(torch.float32)) )
             print(f"e, {e}, acc { acc.item():2.4f}")
 
         for batch in bar:
@@ -128,6 +128,7 @@ if __name__ == "__main__":
             cost_val.backward()
             optimizer.step()
 
-            bar.set_description(f"cost: {cost_val.item():2.2f}")
+            train_acc = torch.mean(torch.abs(y - (torch.nn.functional.sigmoid(yhat) > 0.5).type(torch.float32)))
+            bar.set_description(f"train, cost: {cost_val.item():2.4f}, acc: {train_acc.cpu().item():2.4f}")
 
 
