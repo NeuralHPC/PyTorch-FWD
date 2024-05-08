@@ -64,11 +64,12 @@ class CelebADataset(Dataset):
         self.data_dir = data_dir
         self.annos = np.array(pandas.read_csv(f"{data_dir}/Anno/list_attr_celeba.txt"))
         self.annos_dict = {int(row[0].split()[0].split(".")[0]): row[0].split()[1:] for row in self.annos[1:]}
-        self.transforms = nn.Sequential(
+        self.transforms = torchvision.transforms.Compose([
             torchvision.transforms.Resize((299, 299)),
-        )
-        self.to_tensor = torchvision.transforms.ToTensor()
-
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize([x / 255.0 for x in [129.058, 108.485, 97.622]],
+                                             [x / 255.0 for x in [78.338, 73.131, 72.970]])
+            ])
 
     def __len__(self):
         return len(self.annos_dict) - 1
@@ -79,7 +80,7 @@ class CelebADataset(Dataset):
         img_no_str = '0'*(6 - len(f"{index:d}")) + f"{index:d}"
         img_path = f"{self.data_dir}/Img/img_align_celeba_png/{img_no_str}.png"
         with PIL.Image.open(img_path) as im:
-            tensor = self.to_tensor(self.transforms(im))
+            tensor = self.transforms(im)
         anno = torch.tensor([int(attribute) for attribute in self.annos_dict[index]])
         anno = (anno + 1) // 2
         return {'img': tensor, 'anno': anno}
@@ -97,12 +98,11 @@ if __name__ == "__main__":
     comp_stats = True
 
     train_set, test_set = torch.utils.data.random_split(dataset, [len(dataset) - test_size, test_size])
+    train_loader = DataLoader(train_set, batch_size=256, shuffle=True, num_workers=5)
+    test_loader = DataLoader(test_set, batch_size=128, num_workers=5)
 
-    train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
-    test_loader = DataLoader(test_set, batch_size=128)
-
-    # net = nn.DataParallel(net.cuda())
-    net = net.cuda()
+    net = nn.DataParallel(net.cuda())
+    # net = net.cuda()
     optimizer = optim.Adam(net.parameters(), lr=lr)
     cost = nn.BCEWithLogitsLoss()
 
@@ -113,7 +113,7 @@ if __name__ == "__main__":
         for test_batch in test_loader:
             yhat = net(test_batch['img'].cuda()).logits
             yhat = torch.nn.functional.sigmoid(yhat)
-            acc = torch.mean(torch.abs(test_batch['anno'].cuda().type(torch.float32) - (yhat > 0.5).type(torch.float32)) )
+            acc = torch.mean((test_batch['anno'].cuda() == (yhat > 0.9)).type(torch.float32) )
             print(f"e, {e}, acc { acc.item():2.4f}")
 
         for batch in bar:
@@ -128,7 +128,9 @@ if __name__ == "__main__":
             cost_val.backward()
             optimizer.step()
 
-            train_acc = torch.mean(torch.abs(y - (torch.nn.functional.sigmoid(yhat) > 0.5).type(torch.float32)))
+            train_acc = torch.mean((batch['anno'].cuda() == (yhat > 0.9)).type(torch.float32) )
             bar.set_description(f"train, cost: {cost_val.item():2.4f}, acc: {train_acc.cpu().item():2.4f}")
 
 
+    torch.save(net, 'incelption_converged.pth')
+    torch.save(net, '/tmp/test/incelption_converged.pth')
