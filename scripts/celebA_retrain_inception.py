@@ -86,7 +86,7 @@ class CelebADataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = CelebADataset(data_dir='/home/wolter/Downloads/CelebA')
+    dataset = CelebADataset(data_dir='/home/mwolter1/Downloads/CelebA')
 
     net = torchvision.models.Inception3()
     net.fc = nn.Linear(2048, 40)
