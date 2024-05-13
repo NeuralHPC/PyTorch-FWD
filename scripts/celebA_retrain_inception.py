@@ -78,7 +78,7 @@ class CelebADataset(Dataset):
         # img 0 does not exist.
         index = index + 1
         img_no_str = '0'*(6 - len(f"{index:d}")) + f"{index:d}"
-        img_path = f"{self.data_dir}/Img/img_align_celeba_png/{img_no_str}.png"
+        img_path = f"{self.data_dir}/Img/img_align_celeba/{img_no_str}.jpg"
         with PIL.Image.open(img_path) as im:
             tensor = self.transforms(im)
         anno = torch.tensor([int(attribute) for attribute in self.annos_dict[index]])
@@ -87,34 +87,35 @@ class CelebADataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = CelebADataset(data_dir='/home/mwolter1/Downloads/CelebA')
+    dataset = CelebADataset(data_dir='/home/lveerama/CelebA/')
 
     net = torchvision.models.Inception3()
     net.fc = nn.Linear(2048, 40)
     # pass
-    epochs = 20
+    epochs = 100
     test_size = 128
     lr = 0.001
     comp_stats = True
 
     train_set, test_set = torch.utils.data.random_split(dataset, [len(dataset) - test_size, test_size])
-    train_loader = DataLoader(train_set, batch_size=256, shuffle=True, num_workers=5)
+    train_loader = DataLoader(train_set, batch_size=512, shuffle=True, num_workers=16, prefetch_factor=2)
     test_loader = DataLoader(test_set, batch_size=128, num_workers=5)
 
     net = nn.DataParallel(net.cuda())
+
+    net = torch.compile(net)
     # net = net.cuda()
     optimizer = optim.Adam(net.parameters(), lr=lr)
     cost = nn.BCEWithLogitsLoss()
 
     
-
     for e in range(epochs):
-
+        val_acc = 0.0
         for test_batch in test_loader:
             yhat = net(test_batch['img'].cuda()).logits
             yhat = torch.nn.functional.sigmoid(yhat)
             acc = torch.mean((test_batch['anno'].cuda() == (yhat > 0.9)).type(torch.float32) )
-            print(f"e, {e}, acc { acc.item():2.4f}")
+            print(f"Epoch, {e}, acc { acc.item():2.4f}")
 
         bar = tqdm.tqdm(train_loader)
         for batch in bar:
@@ -132,6 +133,8 @@ if __name__ == "__main__":
             train_acc = torch.mean((batch['anno'].cuda() == (yhat > 0.9)).type(torch.float32) )
             bar.set_description(f"train, cost: {cost_val.item():2.4f}, acc: {train_acc.cpu().item():2.4f}")
 
-
-    torch.save(net, 'incelption_converged.pth')
-    torch.save(net, '/tmp/test/incelption_converged.pth')
+        if e > 20:
+            for g in optimizer.param_groups:
+                g['lr'] = 1e-4
+        torch.save(net.state_dict(), f'./saved_models/inception_converged_{e}.pth')
+    # torch.save(net, '/tmp/test/incelption_converged.pth')
