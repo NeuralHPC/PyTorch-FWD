@@ -58,7 +58,7 @@ label_map = {pos: key for pos, key in enumerate([
     'Young'
 ])}
 
-class CelebADataset(Dataset):
+class ImageLoader(Dataset):
     
     def __init__(self, data_dir):
         self.data_dir = data_dir
@@ -87,7 +87,7 @@ class CelebADataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = CelebADataset(data_dir='/home/lveerama/CelebA/')
+    dataset = ImageLoader(data_dir='/home/lveerama/CelebA/')
 
     net = torchvision.models.Inception3()
     net.fc = nn.Linear(2048, 40)
