@@ -52,19 +52,6 @@ def get_freq_order(level: int):
     return wp_frequency_path, wp_natural_path
 
 
-def fold_channels(input_tensor: torch.Tensor) -> torch.Tensor:
-    """Fold a trailing (color-) channel into the batch dimension.
-
-    Args:
-        input_tensor (torch.Tensor): An array of shape [B, C, H, W]
-
-    Returns:
-        torch.Tensor: The folded [B*C, H, W] image.
-    """
-    shape = input_tensor.shape
-    return torch.reshape(input_tensor, (-1, shape[-2], shape[-1]))
-
-
 def forward_wavelet_packet_transform(
     tensor: torch.Tensor,
     wavelet: str,
@@ -138,93 +125,6 @@ def compute_kl_divergence(
     """
     # Tried with eps 1e-30 and this improves the precision by a small margin but overall ranking remains the same
     return target * torch.log((target / (output + eps)) + eps)
-
-
-def wavelet_packet_power_divergence(
-    output: torch.Tensor,
-    target: torch.Tensor,
-    level: int,
-    wavelet: str,
-    log_scale: bool,
-) -> float:
-    """Compute the wavelet packet power divergence.
-
-    Daubechies wavelets are orthogonal, see Ripples in Mathematics page 129:
-    ""
-    For orthogonal trans-
-    forms (such as those in the Daubechies family) the number of extra signal
-    coefficients is exactly L - 2, with L being the filter length. See p. 135 for the
-    proof.
-    ""
-    Orthogonal transforms conserve energy according
-    Proposition 7.7.1 from Ripples in Mathematics page 80.
-
-    Args:
-        output (torch.Tensor): The network output
-        target (torch.Tensor): The target image
-        level  (int): Wavelet level to use. Defaults to 3
-        wavelet(str): Type of wavelet to use. Defaults to sym5
-
-    Returns:
-        float: Wavelet power divergence metric
-    """
-    assert (
-        output.shape == target.shape
-    ), "Sampled and reference images should have same shape."
-
-    output_packets = forward_wavelet_packet_transform(
-        output, max_level=level, wavelet=wavelet, log_scale=log_scale
-    )
-    target_packets = forward_wavelet_packet_transform(
-        target, max_level=level, wavelet=wavelet, log_scale=log_scale
-    )
-
-    B, P, C, H, W = output_packets.shape
-    output_packets = torch.reshape(output_packets, (B, P, C, H * W))
-    target_packets = torch.reshape(target_packets, (B, P, C, H * W))
-
-    B, P, C, Px = output_packets.shape
-    assert output_packets.shape == target_packets.shape, "Reshape shapes are not same."
-
-    p_tar_hists = []
-    p_out_hists = []
-    for pindex in range(P):
-        c_tar_hists = []
-        c_out_hists = []
-        for cindex in range(C):
-            op_pack = output_packets[:, pindex, cindex, :].flatten()
-            tg_pack = target_packets[:, pindex, cindex, :].flatten()
-            max_val = torch.max(
-                torch.max(torch.abs(op_pack)), torch.max(torch.abs(tg_pack))
-            )
-            max_val = torch.Tensor(1e-12) if max_val == 0 else max_val
-            op_pack = op_pack / max_val
-            tg_pack = tg_pack / max_val
-            output_hist, _ = torch.histogram(
-                op_pack, bins=int((B * Px) ** 0.5), range=(-1, 1)
-            )
-            target_hist, _ = torch.histogram(
-                tg_pack, bins=int((B * Px) ** 0.5), range=(-1, 1)
-            )
-            c_tar_hists.append(target_hist)
-            c_out_hists.append(output_hist)
-        p_tar_hists.append(torch.stack(c_tar_hists))
-        p_out_hists.append(torch.stack(c_out_hists))
-
-    output_hist = torch.stack(p_out_hists)
-    target_hist = torch.stack(p_tar_hists)
-
-    # output_hist = torch.nn.functional.softmax(output_hist)
-    # target_hist = torch.nn.functional.softmax(target_hist)
-    output_hist = output_hist / (torch.sum(output_hist, dim=-1, keepdim=True) + 1e-12)
-    target_hist = target_hist / (torch.sum(target_hist, dim=-1, keepdim=True) + 1e-12)
-
-    kld_ab = compute_kl_divergence(output_hist, target_hist)
-    kld_ba = compute_kl_divergence(target_hist, output_hist)
-    kld = 0.5 * (kld_ab + kld_ba)
-    return float(
-        torch.mean(kld).item()
-    )  # Average kldivergence across packets and channels
 
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):

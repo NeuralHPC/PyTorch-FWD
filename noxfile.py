@@ -12,6 +12,8 @@ def format(session):
     session.run("black", "src", "noxfile.py")
     session.run("isort", "scripts", "noxfile.py")
     session.run("black", "scripts", "noxfile.py")
+    session.run("isort", "tests", "noxfile.py")
+    session.run("black", "tests", "noxfile.py")
 
 
 @nox.session(name="lint")
@@ -27,7 +29,7 @@ def lint(session):
         "pydocstyle",
         "darglint",
     )
-    session.run("flake8", "src", "noxfile.py")
+    session.run("flake8", "src", "tests", "noxfile.py")
 
 
 @nox.session(name="typing")

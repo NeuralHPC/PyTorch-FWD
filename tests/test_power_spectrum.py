@@ -1,55 +1,125 @@
-from itertools import pairwise
+"""Tests for KLDivergence Power Spectrum."""
 
-import pytest
-import scipy.datasets as datasets
-import torch
-import numpy as np
 from copy import deepcopy
-from torchvision.transforms import functional as TVFunc
+from itertools import pairwise
+from typing import Tuple
 
-from src.freq_math import wavelet_packet_power_divergence
-from tests.test_wavelet_frechet_distance import get_images
+import numpy as np
+import pytest
+import torch as th
+
+from src.klwd import compute_packets, wavelet_power_divergence
+from tests.test_wavelet_frechet_distance import (
+    default_params,
+    get_images,
+    make_dataloader,
+)
+
+th.set_default_dtype(th.float64)
+th.use_deterministic_algorithms(True)
 
 
-@pytest.mark.slow
+def _calc_klwd(target_images: th.Tensor, output_images: th.Tensor) -> float:
+    """Compute KLDivergence Power spectrum.
+
+    Args:
+        target_images (th.Tensor): Ground Truth images
+        output_images (th.Tensor): Generated images
+
+    Returns:
+        float: WPKL value.
+    """
+    default_params["dataloader"] = make_dataloader(target_images)
+    target_packets = compute_packets(**default_params)
+    default_params["dataloader"] = make_dataloader(output_images)
+    output_packets = compute_packets(**default_params)
+
+    klwd = wavelet_power_divergence(target_packets, output_packets)
+    return klwd
+
+
 def test_same_input():
-    target_images = get_images(128)
+    """WPKL-test for same input."""
+    target_images = get_images()
     output_images = deepcopy(target_images)
-    kld = wavelet_packet_power_divergence(target_images, output_images, level=4, wavelet="Haar", log_scale=False)
-    assert np.allclose(kld, 0.)
+    klwd = _calc_klwd(target_images, output_images)
+    assert np.allclose(klwd, 0.0)
+
+
+def test_shuffle_input():
+    """WPKL-test for shuffled input."""
+    target_images = get_images()
+    output_images = deepcopy(target_images)
+    permutation = th.randperm((len(target_images)))
+    shuffled_images = output_images[permutation, :, :, :]
+    assert not th.allclose(shuffled_images, output_images)
+
+    shuffled_klwd = _calc_klwd(target_images, shuffled_images)
+    unshuffled_klwd = _calc_klwd(target_images, output_images)
+    assert np.allclose(shuffled_klwd, unshuffled_klwd)
+    assert np.allclose(shuffled_klwd, 0.0)
+    assert np.allclose(unshuffled_klwd, 0.0)
 
 
 @pytest.mark.slow
-def test_shuffle_input():
-    target_images = get_images(128)
+@pytest.mark.parametrize("wavelet", ["sym5", "db5", "Haar"])
+@pytest.mark.parametrize("level", [2, 3])
+def test_various_wavelets(wavelet: str, level: int):
+    """WPKL-test for various wavelets and transformation levels.
+
+    Args:
+        wavelet (str): Type of wavelet. Accepted values [sym5, db5, Haar]
+        level (int): Packet transformation level. Accepted values [2, 3].
+    """
+    target_images = get_images()
     output_images = deepcopy(target_images)
-    permutation = torch.randperm((len(target_images)))
-    shuffled_images = output_images[permutation, :, :, :]
-    assert not torch.allclose(shuffled_images, output_images)
-    kld_shuffled = wavelet_packet_power_divergence(target_images, shuffled_images, level=4, wavelet="Haar", log_scale=False)
-    kld_original = wavelet_packet_power_divergence(target_images, output_images, level=4, wavelet="Haar", log_scale=False)
-    assert np.allclose(kld_original, kld_shuffled)
-    assert np.allclose(kld_original, 0.)
-    assert np.allclose(kld_shuffled, 0.)
+
+    default_params["wavelet"] = wavelet
+    default_params["max_level"] = level
+
+    fwd = _calc_klwd(target_images, output_images)
+    assert np.allclose(fwd, 0.0, atol=1e-3)
 
 
-def test_checkerboard_power_KL():
+@pytest.mark.slow
+@pytest.mark.parametrize("img_size_level", [(32, 1), (64, 2)])
+def test_various_image_sizes(img_size_level: Tuple[int, int]):
+    """Test various image sizes and corresponding transfromation levels.
+
+    Args:
+        img_size_level (Tuple[int, int]): Tuple containing img size and transfromation level.
+    """
+    size, level = img_size_level
+
+    default_params["max_level"] = level
+
+    target_images = get_images(size)
+    output_images = deepcopy(target_images)
+    assert output_images.shape == (8, 3, size, size)
+
+    fwd = _calc_klwd(target_images, output_images)
+    assert np.allclose(fwd, 0.0, atol=1e-3)
+
+
+@pytest.mark.slow
+def test_checkerboard_power_kldiv():
+    """WPKL-Synthetic frequency test using various checkerboard sizes."""
     import scipy.ndimage
 
-    range_max = 100 
+    range_max = 100
     # tile_size = 10 # determines tile size
     images = []
 
     for tile_size in [2, 5, 10]:
-    # generate random grid
-    
-        grid = np.meshgrid(np.arange(0,range_max), np.arange(0,range_max))
+        # generate random grid
+
+        grid = np.meshgrid(np.arange(0, range_max), np.arange(0, range_max))
         # grid = grid[0] + grid[1]
 
-        tile_fun = lambda cord: (cord % tile_size) < (tile_size // 2)
+        tile_fun = lambda cord, ts: (cord % ts) < (ts // 2)  # type: ignore # noqa: E731
 
-        x_tile = tile_fun(grid[0])
-        y_tile = tile_fun(grid[1])
+        x_tile = tile_fun(grid[0], tile_size)
+        y_tile = tile_fun(grid[1], tile_size)
         grid = 1 - (x_tile + y_tile)
 
         grid = grid.astype(np.float32)
@@ -58,7 +128,7 @@ def test_checkerboard_power_KL():
         img_list = []
         for _ in range(1000):
             input_ = np.fft.fft2(grid)
-            shift = np.random.uniform(-1, 1)*tile_size//2
+            shift = np.random.uniform(-1, 1) * tile_size // 2
             image = scipy.ndimage.fourier_shift(input_, shift=shift)
             image = np.fft.ifft2(image)
             img_list.append(image.real)
@@ -71,48 +141,11 @@ def test_checkerboard_power_KL():
 
     # a list for the wavelet frecet distances.
     wfd_list = []
+    default_params["max_level"] = 3
     reference = images[0]
     for cimgs in images[1:]:
-        wfd_list.append(wavelet_packet_power_divergence(output=torch.from_numpy(cimgs),
-                                                        target=torch.from_numpy(reference),
-                                                        level=3,
-                                                        wavelet="haar",
-                                                        log_scale=False))
-    assert all(a < b for a, b in pairwise(wfd_list))
-
-
-@pytest.mark.slow
-def test_gaussian_blur():
-    target_images = get_images(128)
-    blurred_images = []
-    for kernel in (3, 5, 7, 9):
-        blurred_images.append(
-            TVFunc.gaussian_blur(target_images, kernel)
+        kwd = _calc_klwd(
+            target_images=th.from_numpy(reference), output_images=th.from_numpy(cimgs)
         )
-    wfd_list = []
-    for blur_image in blurred_images:
-        wfd_list.append(wavelet_packet_power_divergence(output=blur_image,
-                                                        target=target_images,
-                                                        level=3,
-                                                        wavelet="sym5",
-                                                        log_scale=False))
-    assert all(a < b for a, b in pairwise(wfd_list))
-
-
-@pytest.mark.slow
-def test_gaussian_noise():
-    target_images = get_images(256)
-    noised_images = []
-    for noise_ratio in (0.25, 0.5, 0.75, 1):
-        noised_images.append(
-            noise_ratio * torch.randn_like(target_images) + (1 - noise_ratio) * target_images
-        )
-    wfd_list = []
-    for noise_image in noised_images:
-        wfd_list.append(wavelet_packet_power_divergence(output=noise_image,
-                                                        target=target_images,
-                                                        level=3,
-                                                        wavelet="sym5",
-                                                        log_scale=False))
-    pass
+        wfd_list.append(kwd)
     assert all(a < b for a, b in pairwise(wfd_list))

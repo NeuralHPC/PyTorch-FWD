@@ -2,70 +2,21 @@
 
 import os
 import pathlib
-from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from typing import List, Tuple
 
 import numpy as np
 import torch as th
 import torchvision.transforms as tv
-from PIL import Image
 from tqdm import tqdm
 
 from src.freq_math import calculate_frechet_distance, forward_wavelet_packet_transform
+from src.utils import ImagePathDataset, _parse_args
 
 th.set_default_dtype(th.float64)
 
 
-parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument(
-    "--batch-size",
-    type=int,
-    default=128,
-    help="Batch size for wavelet packet transform.",
-)
-parser.add_argument(
-    "--num-processes", type=int, default=None, help="Number of multiprocess."
-)
-parser.add_argument(
-    "--save-packets", action="store_true", help="Save the packets as npz file."
-)
-parser.add_argument("--wavelet", type=str, default="sym5", help="Choice of wavelet.")
-parser.add_argument(
-    "--max_level", type=int, default=4, help="wavelet decomposition level"
-)
-parser.add_argument(
-    "--log_scale", action="store_true", help="Use log scaling for wavelets."
-)
-parser.add_argument(
-    "path",
-    type=str,
-    nargs=2,
-    help="Path to the generated images or path to .npz statistics file.",
-)
-
 IMAGE_EXTS = {"jpg", "jpeg", "png"}
 NUM_PROCESSES = None
-
-
-class ImagePathDataset(th.utils.data.Dataset):
-    """Image dataset."""
-
-    def __init__(self, files, transforms=None):
-        """File initialization."""
-        self.files = files
-        self.transforms = transforms
-
-    def __len__(self):
-        """Length of dataset."""
-        return len(self.files)
-
-    def __getitem__(self, i):
-        """Load the image."""
-        path = self.files[i]
-        img = Image.open(path).convert("RGB")
-        if self.transforms is not None:
-            img = self.transforms(img)
-        return img
 
 
 def compute_packet_statistics(
@@ -99,8 +50,12 @@ def compute_packet_statistics(
     packet_tensor = th.reshape(packet_tensor, (P, BS, C * H * W))
     print("Computing mean and std for each packet.")
     mu = th.mean(packet_tensor, dim=1).numpy()
+
+    def gpu_cov(tensor_):
+        return th.cov(tensor_.T).cpu()
+
     sigma = th.stack(
-        [th.cov(packet_tensor[p, :, :].T) for p in range(P)], dim=0
+        [gpu_cov(packet_tensor[p, :, :].to(device)) for p in range(P)], dim=0
     ).numpy()
     return mu, sigma
 
@@ -124,7 +79,7 @@ def calculate_path_statistics(
         Tuple[np.ndarray, ...]: Tuple containing mean and sigma for each packet.
     """
     mu, sigma = None, None
-    if path.endswith(".npz"):
+    if path.endswith(".npz") or path.endswith(".npy"):
         with np.load(path) as fp:
             mu = fp["mu"][:]
             sigma = fp["sigma"][:]
@@ -236,7 +191,7 @@ def main():
 
     th.manual_seed(0)
     th.use_deterministic_algorithms(True)
-    args = parser.parse_args()
+    args = _parse_args()
     print(args)
     if args.num_processes is None:
         try:
