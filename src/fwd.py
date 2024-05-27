@@ -11,7 +11,7 @@ import torchvision.transforms as tv
 from PIL import Image
 from tqdm import tqdm
 
-from .freq_math import calculate_frechet_distance, forward_wavelet_packet_transform
+from src.freq_math import calculate_frechet_distance, forward_wavelet_packet_transform
 
 th.set_default_dtype(th.float64)
 

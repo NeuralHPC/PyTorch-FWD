@@ -1,33 +1,59 @@
-Diffusion on CelebA dataset.
+# Fréchet Wavelet Distance: A Domain-Agnostic Metric for Image Generation
 
-# Requirements:
-
-Along with the requirements.txt please install jax corresponding to local cuda version.
-
-# Dataset:
-$\bullet$ Download the CelebA-HQ dataset (e.g., from here: https://github.com/suvojit-0x55aa/celebA-HQ-dataset-download)
-## Important:
-For CIFAR10 the dataset is automatically downloaded by torchvision.
-In case of Celeba and CelebaHQ, please fill the corresponding datapaths in `config/celeba.py`.
+This repository contains code for Paper [update here](https://arxiv.org/html/2312.15289v1).
 
 
-# Training and sampling (Uninode):
-To train diffusion model on uninode
+# Installation
+Clone the repository using 
 ```
-PYTHONPATH=. torchrun --standalone --nproc_per_node=<num_gpus> scripts/train.py --batch-size <bs> --epochs <n_epochs> --time-steps 1000 --dataset=<dataset_name>
+git clone git@github.com:Uni-Bonn-Attention-Research/diffusion.git
+cd ./diffusion
 ```
-For sampling on uninode
-```
-PYTHONPATH=. torchrun --standalone --nproc_per_node=<num_gpus> scripts/sample.py --ckpt-path <checkpoint directory> --input-shape <input_img_height> --dataset=<dataset_name> --sampler="DDPM" --batch-size <bs> --diff-steps=1000
-```
-The supported dataset options are "CIFAR10", "CELEBA64", "CELEBAHQ64", "CELEBAHQ128" and supported sampler options are "DDPM", "DDIM".
 
-# Training and sampling (Multinode):
-To use multinode setup for training and sampling, navigate to `slurmfiles/multinode.sh`
-change the parameters in the torchrun for various datasets and samplers.
+# Requirements
+All the requirements are specified in [requirements.txt](https://github.com/Uni-Bonn-Attention-Research/diffusion/blob/pytorch/requirements.txt) file.
 
-# FID
-Computing the FID
+# Usage
+For simpler usage, we follow similar development pattern as [Pytorch-FID](https://github.com/mseitzer/pytorch-fid).
 ```
-PYTHONPATH=. python scripts/fid/fid.py --ref-path=<reference data path> --sample-path=<Generated data path> --device <device>
+export PYTHONPATH=.
+python src/fwd.py <path to dataset> <path to generated images>
 ```
+Here are the other arguments and defaults used.
+```
+python src/fwd.py --help
+
+usage: fwd.py [-h] [--batch-size BATCH_SIZE] [--num-processes NUM_PROCESSES] [--save-packets] [--wavelet WAVELET] [--max_level MAX_LEVEL] [--log_scale] path path
+
+positional arguments:
+  path                  Path to the generated images or path to .npz statistics file.
+
+options:
+  -h, --help            show this help message and exit
+  --batch-size BATCH_SIZE
+                        Batch size for wavelet packet transform. (default: 128)
+  --num-processes NUM_PROCESSES
+                        Number of multiprocess. (default: None)
+  --save-packets        Save the packets as npz file. (default: False)
+  --wavelet WAVELET     Choice of wavelet. (default: sym5)
+  --max_level MAX_LEVEL
+                        wavelet decomposition level (default: 4)
+  --log_scale           Use log scaling for wavelets. (default: False)
+```
+We conduct all the experiments with `Haar` wavelet with transformation/decomposition level of `4` for `256x256` image.
+
+In future, we plan to release the jax-version of this code.
+
+# Wavelet Power KL-Divergence (WPKL)
+We also experimented with KLDivergence version and found that KLDivergence suffers from scaling issues.
+Please refer to [link here](https://google.com/) here for its usage.
+
+# Citation
+If you use this repository in your research, please cite using the following bibtex entry.
+```
+Replace bibtex here after paper is updated.
+```
+
+# ToDO
+- [ ] PIP package
+- [ ] JAX version
