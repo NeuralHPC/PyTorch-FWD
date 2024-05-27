@@ -172,3 +172,4 @@ logs/
 *curated*
 *.pdf
 *.tex
+!images/fwd_computation.png
