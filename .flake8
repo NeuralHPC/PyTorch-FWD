@@ -22,7 +22,6 @@ ignore =
     DAR201
     # flake and pylance disagree on linebreaks in strings.
     N400
-    N806
 exclude =
     .tox,
     .git,

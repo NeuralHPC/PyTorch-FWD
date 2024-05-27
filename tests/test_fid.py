@@ -1,7 +1,7 @@
 """Test Frechet Inception distance."""
 
 import pytest
-import torch as th
+import torch
 import numpy as np
 from typing import Tuple
 
@@ -11,12 +11,11 @@ from .test_wavelet_frechet_distance import get_images
 from copy import deepcopy
 from torch.nn.functional import adaptive_avg_pool2d
 
-
 @pytest.mark.slow
-def forward_pass(images: th.Tensor) -> Tuple:
+def forward_pass(images: torch.Tensor) -> Tuple:
     block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[2048]
     model = InceptionV3([block_idx])
-    with th.no_grad():
+    with torch.no_grad():
         pred = model(images)[0]
     if pred.size(2) != 1 or pred.size(3) != 1:
         pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
@@ -41,9 +40,9 @@ def test_same_input():
 def test_shuffle_input():
     tensor_images = get_images(img_size=256)
     output_images = deepcopy(tensor_images)
-    permutation = th.randperm(len(output_images))
+    permutation = torch.randperm(len(output_images))
     shuffled_images = output_images[permutation, :, :, :]
-    assert not th.allclose(shuffled_images, output_images)
+    assert not torch.allclose(shuffled_images, output_images)
     mu_orig, sigma_orig = forward_pass(tensor_images)
     mu_shuff, sigma_shuff = forward_pass(shuffled_images)
     mu_op, sigma_op = forward_pass(output_images)
