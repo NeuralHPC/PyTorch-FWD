@@ -52,19 +52,6 @@ def get_freq_order(level: int):
     return wp_frequency_path, wp_natural_path
 
 
-def fold_channels(input_tensor: torch.Tensor) -> torch.Tensor:
-    """Fold a trailing (color-) channel into the batch dimension.
-
-    Args:
-        input_tensor (torch.Tensor): An array of shape [B, C, H, W]
-
-    Returns:
-        torch.Tensor: The folded [B*C, H, W] image.
-    """
-    shape = input_tensor.shape
-    return torch.reshape(input_tensor, (-1, shape[-2], shape[-1]))
-
-
 def forward_wavelet_packet_transform(
     tensor: torch.Tensor,
     wavelet: str,

@@ -50,8 +50,12 @@ def compute_packet_statistics(
     packet_tensor = th.reshape(packet_tensor, (P, BS, C * H * W))
     print("Computing mean and std for each packet.")
     mu = th.mean(packet_tensor, dim=1).numpy()
+
+    def gpu_cov(tensor_):
+        return th.cov(tensor_.T).cpu()
+
     sigma = th.stack(
-        [th.cov(packet_tensor[p, :, :].T) for p in range(P)], dim=0
+        [gpu_cov(packet_tensor[p, :, :].to(device)) for p in range(P)], dim=0
     ).numpy()
     return mu, sigma
 
@@ -75,7 +79,7 @@ def calculate_path_statistics(
         Tuple[np.ndarray, ...]: Tuple containing mean and sigma for each packet.
     """
     mu, sigma = None, None
-    if path.endswith(".npz"):
+    if path.endswith(".npz") or path.endswith(".npy"):
         with np.load(path) as fp:
             mu = fp["mu"][:]
             sigma = fp["sigma"][:]

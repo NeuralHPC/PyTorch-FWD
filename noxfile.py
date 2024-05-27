@@ -12,6 +12,8 @@ def format(session):
     session.run("black", "src", "noxfile.py")
     session.run("isort", "scripts", "noxfile.py")
     session.run("black", "scripts", "noxfile.py")
+    session.run("isort", "tests", "noxfile.py")
+    session.run("black", "tests", "noxfile.py")
 
 
 @nox.session(name="lint")

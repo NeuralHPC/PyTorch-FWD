@@ -1,19 +1,29 @@
 """Test Frechet Inception distance."""
 
+from copy import deepcopy
+from typing import Tuple
+
+import numpy as np
 import pytest
 import torch as th
-import numpy as np
-from typing import Tuple
+from torch.nn.functional import adaptive_avg_pool2d
 
 from scripts.fid.inception import InceptionV3
 from src.freq_math import calculate_frechet_distance
+
 from .test_wavelet_frechet_distance import get_images
-from copy import deepcopy
-from torch.nn.functional import adaptive_avg_pool2d
 
 
 @pytest.mark.slow
-def forward_pass(images: th.Tensor) -> Tuple:
+def forward_pass(images: th.Tensor) -> Tuple[np.ndarray, ...]:
+    """Compute InceptionV3 forward pass.
+
+    Args:
+        images (th.Tensor): Image tensor.
+
+    Returns:
+        Tuple: Tuple containing mu and sigma of predictions.
+    """
     block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[2048]
     model = InceptionV3([block_idx])
     with th.no_grad():
@@ -29,6 +39,7 @@ def forward_pass(images: th.Tensor) -> Tuple:
 
 @pytest.mark.slow
 def test_same_input():
+    """FID-test same input."""
     tensor_images = get_images(img_size=256)
     output_images = deepcopy(tensor_images)
     mu1, sigma1 = forward_pass(tensor_images)
@@ -39,6 +50,7 @@ def test_same_input():
 
 @pytest.mark.slow
 def test_shuffle_input():
+    """FID-test shuffled input."""
     tensor_images = get_images(img_size=256)
     output_images = deepcopy(tensor_images)
     permutation = th.randperm(len(output_images))
@@ -48,5 +60,7 @@ def test_shuffle_input():
     mu_shuff, sigma_shuff = forward_pass(shuffled_images)
     mu_op, sigma_op = forward_pass(output_images)
     original_fid = calculate_frechet_distance(mu_orig, sigma_orig, mu_op, sigma_op)
-    shuffled_fid = calculate_frechet_distance(mu_orig, sigma_orig, mu_shuff, sigma_shuff)
+    shuffled_fid = calculate_frechet_distance(
+        mu_orig, sigma_orig, mu_shuff, sigma_shuff
+    )
     assert np.allclose(shuffled_fid, original_fid, atol=1e-4)
