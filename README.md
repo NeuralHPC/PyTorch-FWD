@@ -2,7 +2,7 @@
 
 This repository contains code for Paper [update here](https://arxiv.org/html/2312.15289v1).
 
-
+![alt text](https://github.com/Uni-Bonn-Attention-Research/diffusion/blob/pytorch/images/fwd_computation.png)
 # Installation
 Clone the repository using 
 ```
