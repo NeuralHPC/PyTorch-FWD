@@ -6,6 +6,6 @@ scikit-learn
 torch==2.0
 torchvision
 PyWavelets
-ptwt
+ptwt==0.1.8
 tqdm
 
