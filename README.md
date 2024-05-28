@@ -1,7 +1,8 @@
 # Fréchet Wavelet Distance: A Domain-Agnostic Metric for Image Generation
 
+![example workflow](https://github.com/Uni-Bonn-Attention-Research/frechet_wavelet_distance/actions/workflows/tests.yml/badge.svg)
 
-[[Paper]](https://arxiv.org/pdf/2312.15289)[[Project Page]](https://lokiv.dev/frechet_wavelet_distance/)
+[[Archive](https://arxiv.org/pdf/2312.15289)] [[Project Page](https://lokiv.dev/frechet_wavelet_distance/)]
 
 _[Lokesh Veeramacheneni](https://lokiv.dev)<sup>1</sup>, [Moritz Wolter](https://www.wolter.tech/)<sup>1</sup>, [Hilde Kuehne](https://hildekuehne.github.io/)<sup>1,2</sup>, and [Juergen Gall](https://pages.iai.uni-bonn.de/gall_juergen/)<sup>1</sup>_
 
@@ -18,15 +19,14 @@ Some text here
 # :hammer_and_wrench: Installation
 Clone the repository using 
 ```
-git clone git@github.com:Uni-Bonn-Attention-Research/diffusion.git
-cd ./diffusion
+git clone git@github.com:Uni-Bonn-Attention-Research/frechet_wavelet_distance.git
+cd ./frechet_wavelet_distance
 ```
 
-# Requirements
+# :test_tube: Requirements
 All the requirements are specified in [requirements.txt](https://github.com/Uni-Bonn-Attention-Research/diffusion/blob/pytorch/requirements.txt) file.
 
-# Usage
-For simpler usage, we follow similar development pattern as [Pytorch-FID](https://github.com/mseitzer/pytorch-fid).
+# :school_satchel: Usage
 ```
 export PYTHONPATH=.
 python src/fwd.py <path to dataset> <path to generated images>
@@ -56,16 +56,23 @@ We conduct all the experiments with `Haar` wavelet with transformation/decomposi
 
 In future, we plan to release the jax-version of this code.
 
-# Wavelet Power KL-Divergence (WPKL)
-We also experimented with KLDivergence version and found that KLDivergence suffers from scaling issues.
-Please refer to [link here](https://google.com/) here for its usage.
-
-# Citation
+# :paperclip: Citation
 If you use this repository in your research, please cite using the following bibtex entry.
 ```
 Replace bibtex here after paper is updated.
 ```
 
-# ToDO
+# :star: Acknowledgments
+The code is built with inspiration from [Pytorch-FID](https://github.com/mseitzer/pytorch-fid).
+We use [PyTorch Wavelet Toolbox](https://github.com/v0lta/PyTorch-Wavelet-Toolbox) for Wavelet Packet Transform implementation.
+We recommend to have a look at these repositories.
+
+# :construction: ToDO
+- [x] Project Page
 - [ ] PIP package
 - [ ] JAX version
+
+
+# :heavy_plus_sign: Wavelet Power KL-Divergence (WPKL)
+We also experimented with KLDivergence version and found that KLDivergence suffers from scaling issues.
+Please refer to [link here](https://google.com/) here for its usage.
