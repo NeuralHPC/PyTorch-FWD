@@ -1,9 +1,21 @@
 # Fréchet Wavelet Distance: A Domain-Agnostic Metric for Image Generation
 
-This repository contains code for Paper [update here](https://arxiv.org/html/2312.15289v1).
 
-![alt text](https://github.com/Uni-Bonn-Attention-Research/diffusion/blob/pytorch/images/fwd_computation.png)
-# Installation
+[[Paper]](https://arxiv.org/pdf/2312.15289)[[Project Page]](https://lokiv.dev/frechet_wavelet_distance/)
+
+_[Lokesh Veeramacheneni](https://lokiv.dev)<sup>1</sup>, [Moritz Wolter](https://www.wolter.tech/)<sup>1</sup>, [Hilde Kuehne](https://hildekuehne.github.io/)<sup>1,2</sup>, and [Juergen Gall](https://pages.iai.uni-bonn.de/gall_juergen/)<sup>1</sup>_
+
+<sup>1</sup> University of Bonn,
+<sup>2</sup> Goethe University Frankfurt and MIT-IBM Watson AI Lab.
+
+Some text here
+
+<div align="center">
+<img src="./images/fwd_computation.png", width="100%"/>
+</div>
+
+
+# :hammer_and_wrench: Installation
 Clone the repository using 
 ```
 git clone git@github.com:Uni-Bonn-Attention-Research/diffusion.git
