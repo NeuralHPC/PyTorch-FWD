@@ -1,12 +1,14 @@
-from typing import Tuple
+"""Wavelet utils."""
 
 from itertools import product
+from typing import Optional
 
-import pywt
-import jaxwt as jwt
-import jax.numpy as jnp
 import numpy as np
-import optax
+import ptwt
+import pywt
+import torch
+from scipy import linalg
+
 
 def get_freq_order(level: int):
     """Get the frequency order for a given packet decomposition level.
@@ -50,63 +52,41 @@ def get_freq_order(level: int):
     return wp_frequency_path, wp_natural_path
 
 
-def fold_channels(array: jnp.ndarray) -> jnp.ndarray:
-    """Fold a trailing (color-) channel into the batch dimension.
-
-    Args:
-        array (jnp.ndarray): An array of shape [B, H, W, C]
-
-    Returns:
-        jnp.ndarray: The folded [B*C, H, W] image.
-    """    
-    shape = array.shape
-    # fold color channel.
-    return jnp.transpose(jnp.reshape(
-        jnp.transpose(array, [1, 2, 0, 3]), [shape[1], shape[2], -1]), [-1, 0, 1])
-
-def unfold_channels(array: jnp.ndarray, original_shape: Tuple[int, int, int, int]) -> jnp.ndarray:
-    """Restore channels from the leading batch-dimension.
-
-    Args:
-        array (jnp.ndarray): An [B*C, packets, H, W] input array. 
-
-    Returns:
-        jnp.ndarray: Output of shape [B, H, W, C]
-    """
-     
-    bc_shape = array.shape
-    array_rs = jnp.reshape(jnp.transpose(array, [1, 2, 3, 0]),
-                           [bc_shape[1], bc_shape[2], bc_shape[3],
-                            original_shape[0], original_shape[3]])
-    return jnp.transpose(array_rs, [-2, 0, 1, 2, 4])
-
-
 def forward_wavelet_packet_transform(
-        tensor: jnp.ndarray, wavelet: str = "db3", max_level: int = 3,
-        log_scale=False) -> jnp.ndarray:
-    shape = tensor.shape
-    # fold color channel.
-    tensor = fold_channels(tensor)
-    packets = jwt.packets.WaveletPacket2D(tensor, pywt.Wavelet(wavelet),
-        max_level=max_level)
+    tensor: torch.Tensor,
+    wavelet: str,
+    max_level: int,
+    log_scale: bool,
+) -> torch.Tensor:
+    """Compute wavelet packet transform.
 
-    paths = list(product(["a", "h", "v", "d"], repeat=max_level))
-    packet_list = []
-    for node in paths:
-        packet_list.append(packets["".join(node)])
-    wp_pt = jnp.stack(packet_list, axis=1)
+    Args:
+        tensor (torch.Tensor): Input torch tensor
+        wavelet (str): Choice of wavelet
+        max_level (int): Level of decomposition
+        log_scale (bool): Log scale boolean
 
-    # restore color channel
-    wp_pt_rs = unfold_channels(wp_pt, shape)
+    Returns:
+        torch.Tensor: Packets
+    """
+    # ideally the output dtype should depend in the input.
+    # tensor = tensor.type(torch.FloatTensor)
+    packets = ptwt.WaveletPacket2D(tensor, pywt.Wavelet(wavelet), maxlevel=max_level)
+    packet_list = [packets[node] for node in packets.get_natural_order(max_level)]
 
+    # for node in packets.get_natural_order(max_level):
+    # packet = torch.squeeze(packets[node], dim=1)
+    # packet_list.append(packets[node])
+    wp_pt_rs = torch.stack(packet_list, dim=1)
     if log_scale:
-        wp_pt_rs = jnp.log(jnp.abs(wp_pt_rs) + 1e-12)
+        wp_pt_rs = torch.log(torch.abs(wp_pt_rs) + 1e-6)
 
     return wp_pt_rs
 
 
 def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
     """Create a ready-to-polt image with frequency-order packages.
+
        Given a packet array in natural order, creat an image which is
        ready to plot in frequency order.
     Args:
@@ -126,82 +106,86 @@ def generate_frequency_packet_image(packet_array: np.ndarray, degree: int):
             index = wp_natural_path.index(row_path)
             packet = packet_array[:, index]
             row.append(packet)
-        image.append(np.concatenate(row, -2))
-    return np.concatenate(image, -3)
+        image.append(np.concatenate(row, -1))
+    return np.concatenate(image, 2)
 
 
-def inverse_wavelet_packet_transform(packet_array: jnp.array, wavelet: str, max_level: int):
-    batch = packet_array.shape[0]
-    channel = packet_array.shape[-1]
-
-    def get_node_order(level):
-        wp_natural_path = list(product(["a", "h", "v", "d"], repeat=level))
-        return ["".join(p) for p in wp_natural_path]
-
-    wp_dict = {}
-    for pos, path in enumerate(get_node_order(max_level)):
-        wp_dict[path] = packet_array[:, pos, :, :, :]
-
-    for level in reversed(range(max_level)):
-        for node in get_node_order(level):
-            data_a = fold_channels(wp_dict[node + "a"])
-            data_h = fold_channels(wp_dict[node + "h"])
-            data_v = fold_channels(wp_dict[node + "v"])
-            data_d = fold_channels(wp_dict[node + "d"])
-            rec = jwt.waverec2([data_a, (data_h, data_v, data_d)], pywt.Wavelet(wavelet))
-            height = rec.shape[1]
-            width = rec.shape[2]
-            rec = unfold_channels(np.expand_dims(rec, 1), [batch, height, width, channel])
-            rec = np.squeeze(rec, 1)
-            wp_dict[node] = rec
-    return rec
-
-
-def fourier_power_divergence(output: jnp.ndarray, target: jnp.ndarray) -> jnp.ndarray:
-    """Power spectrum entropy metric as presented in:
-    https://openaccess.thecvf.com/content_ICCV_2019/papers/Hernandez_Human_Motion_Prediction_via_Spatio-Temporal_Inpainting_ICCV_2019_paper.pdf
+def compute_kl_divergence(
+    output: torch.Tensor, target: torch.Tensor, eps: Optional[float] = 1e-30
+) -> torch.Tensor:
+    """Compute KL Divergence.
 
     Args:
-        output (jnp.ndarray): The network output.
-        target (jnp.ndarray): The target image.
+        output (torch.Tensor): Output Images
+        target (torch.Tensor): Target Images
+        eps (float, optional): Epsilon. Defaults to 1e-12.
 
     Returns:
-        (jnp.ndarray): A scalar metric.
+        torch.Tensor: KL Divergence value
     """
-
-    radius_no_sqrt = lambda z_comp: jnp.real(z_comp)**2 + jnp.imag(z_comp)**2
-
-    output_fft = jnp.fft.fft2(output)
-    output_power = radius_no_sqrt(output_fft)
-    target_fft = jnp.fft.fft2(target)
-    target_power = radius_no_sqrt(target_fft)
-    return jnp.mean(optax.convex_kl_divergence(jnp.log(output_power), target_power))
+    # Tried with eps 1e-30 and this improves the precision by a small margin but overall ranking remains the same
+    return target * torch.log((target / (output + eps)) + eps)
 
 
-def wavelet_packet_power_divergence(output: jnp.ndarray, target: jnp.ndarray,
-                                    level: int = 3) -> jnp.ndarray:
-    """Compute the wavelet packet power divergence.
-      
-    Daubechies wavelets are orthogonal, see Ripples in Mathematics page 129:
-    ""
-    For orthogonal trans-
-    forms (such as those in the Daubechies family) the number of extra signal
-    coefficients is exactly L - 2, with L being the filter length. See p. 135 for the
-    proof.
-    ""
-    Orthogonal transforms conserve energy according
-    Proposition 7.7.1 from Ripples in Mathematics page 80.
+def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
+    """Frechet Distance Implementation from https://github.com/bioinf-jku/TTUR/blob/master/fid.py.
 
-    Args:
-        output (jnp.ndarray): _description_
-        target (jnp.ndarray): _description_
+    Numpy implementation of the Frechet Distance.
+    The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
+    and X_2 ~ N(mu_2, C_2) is
+            d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
+
+    Stable version by Dougal J. Sutherland.
+
+    Params:
+    -- mu1   : Numpy array containing the activations of a layer of the
+               inception net (like returned by the function 'get_predictions')
+               for generated samples.
+    -- mu2   : The sample mean over activations, precalculated on an
+               representative data set.
+    -- sigma1: The covariance matrix over activations for generated samples.
+    -- sigma2: The covariance matrix over activations, precalculated on an
+               representative data set.
+
+    Raises:
+        ValueError: Value error if imaginary component has large value.
 
     Returns:
-        jnp.ndarray: _description_
+    --   : The Frechet Distance.
     """
-    output_packets = forward_wavelet_packet_transform(output, max_level=level)
-    target_packets = forward_wavelet_packet_transform(target, max_level=level)
+    mu1 = np.atleast_1d(mu1)
+    mu2 = np.atleast_1d(mu2)
 
-    output_energy = output_packets**2
-    target_energy = target_packets**2
-    return jnp.mean(optax.convex_kl_divergence(jnp.log(output_energy), target_energy))
+    sigma1 = np.atleast_2d(sigma1)
+    sigma2 = np.atleast_2d(sigma2)
+
+    assert (
+        mu1.shape == mu2.shape
+    ), "Training and test mean vectors have different lengths"
+    assert (
+        sigma1.shape == sigma2.shape
+    ), "Training and test covariances have different dimensions"
+
+    diff = mu1 - mu2
+
+    # Product might be almost singular
+    covmean = linalg.sqrtm(sigma1.dot(sigma2))
+    if not np.isfinite(covmean).all():
+        msg = (
+            "fid calculation produces singular product; "
+            "adding %s to diagonal of cov estimates"
+        ) % eps
+        print(msg)
+        offset = np.eye(sigma1.shape[0]) * eps
+        covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+
+    # Numerical error might give slight imaginary component
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError("Imaginary component {}".format(m))
+        covmean = covmean.real
+
+    tr_covmean = np.trace(covmean)
+
+    return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean

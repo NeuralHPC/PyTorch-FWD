@@ -1,8 +1,11 @@
-datasets
 pillow
 matplotlib
-clu
-tensorflow-cpu
-multiprocess
-jaxwt==0.0.8
-scipy
+scipy==1.11.1
+numpy
+scikit-learn
+torch==2.0
+torchvision
+PyWavelets
+ptwt==0.1.8
+tqdm
+
