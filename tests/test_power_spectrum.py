@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import torch as th
 
-from src.klwd import compute_packets, wavelet_power_divergence
+from scripts.wpkl.wpkl import compute_packets, wavelet_power_divergence
 from tests.test_wavelet_frechet_distance import (
     default_params,
     get_images,

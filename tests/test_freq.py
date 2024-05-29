@@ -9,7 +9,7 @@ import pywt
 import scipy
 import torch as th
 
-from src.freq_math import (
+from src.fwd.freq_math import (
     forward_wavelet_packet_transform,
     generate_frequency_packet_image,
 )

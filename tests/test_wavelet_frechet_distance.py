@@ -10,7 +10,7 @@ import torch as th
 from sklearn.datasets import load_sample_images
 from torchvision import transforms
 
-from src.fwd import compute_avg_frechet_distance, compute_packet_statistics
+from src.fwd.fwd import compute_avg_frechet_distance, compute_packet_statistics
 
 th.set_default_dtype(th.float64)
 th.use_deterministic_algorithms(True)
