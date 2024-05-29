@@ -2,7 +2,7 @@
 _[Lokesh Veeramacheneni](https://lokiv.dev)<sup>1</sup>, [Moritz Wolter](https://www.wolter.tech/)<sup>1</sup>, [Hilde Kuehne](https://hildekuehne.github.io/)<sup>1,2</sup>, and [Juergen Gall](https://pages.iai.uni-bonn.de/gall_juergen/)<sup>1</sup>_
 
 <sup>1</sup> University of Bonn,
-<sup>2</sup> Goethe University Frankfurt and MIT-IBM Watson AI Lab.
+<sup>2</sup> MIT-IBM Watson AI Lab.
 
 [[Archive](https://arxiv.org/pdf/2312.15289)] [[Project Page](https://lokiv.dev/frechet_wavelet_distance/)]
 
