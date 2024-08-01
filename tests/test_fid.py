@@ -9,7 +9,7 @@ import torch as th
 from torch.nn.functional import adaptive_avg_pool2d
 
 from scripts.fid.inception import InceptionV3
-from src.fwd.freq_math import calculate_frechet_distance
+from fwd.freq_math import calculate_frechet_distance
 
 from .test_wavelet_frechet_distance import get_images
 

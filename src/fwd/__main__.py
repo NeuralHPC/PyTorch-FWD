@@ -1,5 +1,6 @@
 """src main file."""
 
-import fwd.fwd
+from .fwd import main
 
-fwd.fwd.main()
+if __name__ == '__main__':
+    main()

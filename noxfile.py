@@ -35,7 +35,7 @@ def lint(session):
 @nox.session(name="typing")
 def mypy(session):
     """Check type hints."""
-    session.install("-r", "requirements.txt")
+    session.install(".")
     session.install("mypy")
     session.run(
         "mypy",
@@ -54,14 +54,43 @@ def mypy(session):
 @nox.session(name="test")
 def test(session):
     """Run long pytest."""
-    session.install("-r", "requirements.txt")
+    session.install(".")
     session.chdir("tests")
-    session.run("pytest")
+    # env handles deterministic CuBLAS with CUDA >= 10.2
+    session.run("pytest", env={"CUBLAS_WORKSPACE_CONFIG": "4096:8"})
 
 
 @nox.session(name="fast-test")
 def run_test_fast(session):
     """Run pytest."""
-    session.install("-r", "requirements.txt")
+    session.install(".")
     session.install("pytest")
-    session.run("pytest", "-m", "not slow")
+    # env handles deterministic CuBLAS with CUDA >= 10.2
+    session.run("pytest", "-m", "not slow", env={"CUBLAS_WORKSPACE_CONFIG": "4096:8"})
+
+
+@nox.session(name="build")
+def build(session):
+    """Build a pip package."""
+    session.install("build")
+    session.run("python", "-m", "build")
+
+
+@nox.session(name="finish")
+def finish(session):
+    """Finish this version increase the version number and upload to pypi."""
+    session.install("bump2version")
+    session.install("twine")
+    session.run("bumpversion", "release", external=True)
+    build(session)
+    session.run("twine", "upload", "--skip-existing", "dist/*", external=True)
+    session.run("git", "push", external=True)
+    session.run("bumpversion", "patch", external=True)
+    session.run("git", "push", external=True)
+
+
+@nox.session(name="check-package")
+def pyroma(session):
+    """Run pyroma to check if the package is ok."""
+    session.install("pyroma")
+    session.run("pyroma", ".")

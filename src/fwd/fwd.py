@@ -9,11 +9,11 @@ import torch as th
 import torchvision.transforms as tv
 from tqdm import tqdm
 
-from src.fwd.freq_math import (
+from .freq_math import (
     calculate_frechet_distance,
     forward_wavelet_packet_transform,
 )
-from src.fwd.utils import ImagePathDataset, _parse_args
+from .utils import ImagePathDataset, _parse_args
 
 th.set_default_dtype(th.float64)
 
