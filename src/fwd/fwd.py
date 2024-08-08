@@ -107,7 +107,7 @@ def calculate_path_statistics(
     return mu, sigma
 
 
-def compute_avg_frechet_distance(mu1, mu2, sigma1, sigma2):
+def _compute_avg_frechet_distance(mu1, mu2, sigma1, sigma2):
     """Compute avg frechet distance over packets."""
     frechet_distances = []
     for packet_no in tqdm(range(len(mu1))):
@@ -153,10 +153,10 @@ def compute_fwd(
     )
 
     print("Computing Frechet distances for each packet.")
-    return compute_avg_frechet_distance(mu_1, mu_2, sigma_1, sigma_2)
+    return _compute_avg_frechet_distance(mu_1, mu_2, sigma_1, sigma_2)
 
 
-def save_packets(
+def _save_packets(
     paths: List[str], wavelet: str, max_level: int, log_scale: bool, batch_size: int
 ) -> None:
     """Save packets.
@@ -203,7 +203,7 @@ def main():
         NUM_PROCESSES = args.num_processes
     print(f"Num work: {NUM_PROCESSES}")
     if args.save_packets:
-        save_packets(
+        _save_packets(
             args.path, args.wavelet, args.max_level, args.log_scale, args.batch_size
         )
         return
