@@ -8,9 +8,10 @@ Wolter <https://www.wolter.tech/>`__\ :sup:`1`, `Hilde
 Kuehne <https://hildekuehne.github.io/>`__\ :sup:`1,2`, and `Juergen
 Gall <https://pages.iai.uni-bonn.de/gall_juergen/>`__\ :sup:`1`
 
-| 1 University of Bonn, 
-| 2 University of Tübingen, MIT-IBM Watson AI Lab.
+| 1. *University of Bonn*, 
+| 2. *University of Tübingen, MIT-IBM Watson AI Lab*.
 |
+
 [`Archive <https://arxiv.org/pdf/2312.15289>`__] [`Project
 Page <https://lokiv.dev/frechet_wavelet_distance/>`__]
 
@@ -121,12 +122,6 @@ The `tests` folder contains tests to conduct independent verification of FWD. Gi
 To run tests on your local system install `nox` and run
 .. code-block::
    nox -s test
-
-ToDO
-====
-
--  ☒ Project Page
--  ☒ PIP package
 
 
 .. |Workflow| image:: https://github.com/Uni-Bonn-Attention-Research/frechet_wavelet_distance/actions/workflows/tests.yml/badge.svg
