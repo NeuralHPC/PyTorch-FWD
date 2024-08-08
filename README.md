@@ -21,22 +21,24 @@ ___Abstract:___ Modern metrics for generative learning like Fréchet Inception D
 
 # :hammer_and_wrench: Installation
 Clone the repository using 
-```
+``` bash
 git clone git@github.com:Uni-Bonn-Attention-Research/frechet_wavelet_distance.git
 cd ./frechet_wavelet_distance
+pip install .
 ```
 
 # :test_tube: Requirements
 All the requirements are specified in [requirements.txt](https://github.com/Uni-Bonn-Attention-Research/diffusion/blob/pytorch/requirements.txt) file.
 
 # :school_satchel: Usage
-```
-export PYTHONPATH=.
-python src/fwd.py <path to dataset> <path to generated images>
+``` bash
+ python -m fwd <path to dataset> <path to generated images>
 ```
 Here are the other arguments and defaults used.
+``` bash
+python -m fwd --help
 ```
-python src/fwd.py --help
+
 
 usage: fwd.py [-h] [--batch-size BATCH_SIZE] [--num-processes NUM_PROCESSES] [--save-packets] [--wavelet WAVELET] [--max_level MAX_LEVEL] [--log_scale] path path
 
