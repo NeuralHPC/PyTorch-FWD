@@ -37,7 +37,7 @@ of a wide variety of generators across various datasets that the
 proposed FWD is able to generalize and improve robustness to domain
 shift and various corruptions compared to other metrics.
 
-.. image:: ./images/fwd_computation.png
+.. image:: https://github.com/NeuralHPC/PyTorch-FWD/blob/master/images/fwd_computation.png
    :width: 100%
    :alt: Alternative text
 
