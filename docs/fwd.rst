@@ -2,10 +2,10 @@ The PyTorch-FWD package
 ========================
 
 
-fwd.fwd module
+pytorchfwd.pytorchfwd module
 ---------------------------
 
-.. automodule:: fwd.fwd
+.. automodule:: pytorchfwd.pytorchfwd
    :members:
    :undoc-members:
    :show-inheritance:
