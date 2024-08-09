@@ -1,5 +1,6 @@
 """Test Wavelet packet Frechet distance."""
 
+import os
 from copy import deepcopy
 from itertools import pairwise
 from typing import Tuple
@@ -12,8 +13,7 @@ from torchvision import transforms
 
 from fwd.fwd import _compute_avg_frechet_distance, compute_packet_statistics
 
-import os
-os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:8"
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 th.set_default_dtype(th.float64)
 th.use_deterministic_algorithms(True)

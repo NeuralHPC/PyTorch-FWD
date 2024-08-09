@@ -31,7 +31,9 @@ def _parse_args():
         "--log_scale", action="store_true", help="Use log scaling for wavelets."
     )
     parser.add_argument(
-        "--deterministic", action="store_true", help="Set PyTorch to deterministic mode, for perfect reproducability."
+        "--deterministic",
+        action="store_true",
+        help="Set PyTorch to deterministic mode, for perfect reproducability.",
     )
     parser.add_argument(
         "path",
