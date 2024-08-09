@@ -61,7 +61,7 @@ Usage
 
 Here are the other arguments and defaults used.
 
-.. code:: bash
+.. code-block::
 
    python -m pytorchfwd --help
    
