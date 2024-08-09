@@ -1,1 +1,2 @@
-pytorch-fwd
+pytorchfwd
+sphinx_book_theme
