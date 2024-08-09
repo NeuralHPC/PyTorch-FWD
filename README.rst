@@ -14,8 +14,10 @@ Gall <https://pages.iai.uni-bonn.de/gall_juergen/>`__\ :sup:`1`
 
 [`Archive <https://arxiv.org/pdf/2312.15289>`__] [`Project
 Page <https://lokiv.dev/frechet_wavelet_distance/>`__]
+[`Docs <https://pytorchfwd.readthedocs.io/en/latest/>`__]
 
-|Workflow| |License| |CodeStyle|
+
+|Docs| |License| |CodeStyle| |Workflow|
 
 **Keywords:** Frechet Distance, Wavelet Packet Transform, Frechet
 Inception Distance, Diffusion, GAN, ImageNet, Image generation metrics.
@@ -118,9 +120,12 @@ To run tests on your local system install `nox`, as well as this package via `pi
    nox -s test
 
 
-.. |Workflow| image:: https://github.com/Uni-Bonn-Attention-Research/frechet_wavelet_distance/actions/workflows/tests.yml/badge.svg
+.. |Workflow| image:: https://github.com/NeuralHPC/PyTorch-FWD/actions/workflows/tests.yml/badge.svg
    :target: https://github.com/NeuralHPC/PyTorch-FWD/actions/workflows/tests.yml
 .. |License| image:: https://img.shields.io/badge/License-Apache_2.0-blue.svg
    :target: https://opensource.org/licenses/Apache-2.0
 .. |CodeStyle| image:: https://img.shields.io/badge/code%20style-black-000000.svg
    :target: https://github.com/psf/black
+.. |Docs| image:: https://readthedocs.org/projects/pytorchfwd/badge/?version=latest
+    :target: https://pytorchfwd.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
