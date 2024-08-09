@@ -52,13 +52,6 @@ Install via pip
    pip install pytorchfwd
 
 
-Requirements
-============
-
-All the requirements are specified in
-`requirements.txt <https://github.com/Uni-Bonn-Attention-Research/diffusion/blob/pytorch/requirements.txt>`__
-file.
-
 Usage
 =====
 
