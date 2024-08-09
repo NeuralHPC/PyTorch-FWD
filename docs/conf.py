@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath("../src"))
 project = 'PyTorch-FWD'
 copyright = '2024'
 author = 'Lokesh Veeramacheneni, Moritz Wolter'
-release = '0.0.1'
+# release = '0.0.1'
 
 # -- General configuration ---------------------------------------------------
 
