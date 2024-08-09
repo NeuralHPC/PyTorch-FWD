@@ -10,7 +10,10 @@ import torch as th
 from sklearn.datasets import load_sample_images
 from torchvision import transforms
 
-from fwd.fwd import compute_avg_frechet_distance, compute_packet_statistics
+from fwd.fwd import _compute_avg_frechet_distance, compute_packet_statistics
+
+import os
+os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:8"
 
 th.set_default_dtype(th.float64)
 th.use_deterministic_algorithms(True)
@@ -65,7 +68,7 @@ def _calc_fwd(target_images: th.Tensor, output_images: th.Tensor) -> float:
     default_params["dataloader"] = make_dataloader(output_images)
     mu2, sigma2 = compute_packet_statistics(**default_params)
 
-    distance = compute_avg_frechet_distance(mu1, mu2, sigma1, sigma2)
+    distance = _compute_avg_frechet_distance(mu1, mu2, sigma1, sigma2)
     return distance
 
 

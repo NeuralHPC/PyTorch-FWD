@@ -3,6 +3,7 @@
 from itertools import product
 from typing import Tuple
 
+import numpy as np
 import ptwt
 import pytest
 import pywt
@@ -20,7 +21,7 @@ def test_wpt():
     """Packet test for forward transfrom."""
     import scipy.datasets
 
-    face = th.Tensor(scipy.datasets.face())
+    face = th.from_numpy(np.array(scipy.datasets.face()))
     face = th.stack([face, face, face, face], axis=0)
     face = face.type(th.FloatTensor) / 255.0
     b, h, w, c = face.shape

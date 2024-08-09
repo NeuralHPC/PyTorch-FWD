@@ -190,7 +190,6 @@ def main():
     global NUM_PROCESSES, IMAGE_EXTS
 
     th.manual_seed(0)
-    th.use_deterministic_algorithms(True)
     args = _parse_args()
     print(args)
     if args.num_processes is None:
@@ -202,6 +201,8 @@ def main():
     else:
         NUM_PROCESSES = args.num_processes
     print(f"Num work: {NUM_PROCESSES}")
+    if args.deterministic:
+        th.use_deterministic_algorithms(True)
     if args.save_packets:
         _save_packets(
             args.path, args.wavelet, args.max_level, args.log_scale, args.batch_size
