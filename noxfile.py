@@ -83,8 +83,10 @@ def finish(session):
     """
     session.run("bumpversion", "release", external=True)
 
+
 @nox.session(name="new-patch")
 def finish(session):
+    """Start a new patch version."""
     session.run("bumpversion", "patch", external=True)
 
 
