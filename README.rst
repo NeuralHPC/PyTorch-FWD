@@ -45,13 +45,12 @@ shift and various corruptions compared to other metrics.
 Installation
 ============
 
-Clone the repository using
+Install via pip 
 
 .. code:: bash
 
-   git clone git@github.com:Uni-Bonn-Attention-Research/frechet_wavelet_distance.git
-   cd ./frechet_wavelet_distance
-   pip install .
+   pip install pytorchfwd
+
 
 Requirements
 ============
@@ -71,7 +70,7 @@ Here are the other arguments and defaults used.
 
 .. code:: bash
 
-   python -m fwd --help
+   python -m pytorchfwd --help
    
    usage: pytorchfwd.py [-h] [--batch-size BATCH_SIZE] [--num-processes NUM_PROCESSES] [--save-packets] [--wavelet WAVELET] [--max_level MAX_LEVEL] [--log_scale] path path
    
