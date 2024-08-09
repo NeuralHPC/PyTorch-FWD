@@ -11,7 +11,7 @@ import torch as th
 from sklearn.datasets import load_sample_images
 from torchvision import transforms
 
-from fwd.fwd import _compute_avg_frechet_distance, compute_packet_statistics
+from pytorchfwd.fwd import _compute_avg_frechet_distance, compute_packet_statistics
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 

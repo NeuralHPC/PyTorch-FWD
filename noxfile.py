@@ -57,7 +57,7 @@ def test(session):
     session.install(".")
     session.chdir("tests")
     # env handles deterministic CuBLAS with CUDA >= 10.2
-    session.run("pytest")
+    session.run("pytest", env={"CUBLAS_WORKSPACE_CONFIG": "4096:8"})
 
 
 @nox.session(name="fast-test")
@@ -66,7 +66,7 @@ def run_test_fast(session):
     session.install(".")
     session.install("pytest")
     # env handles deterministic CuBLAS with CUDA >= 10.2
-    session.run("pytest", "-m", "not slow")
+    session.run("pytest", "-m", "not slow", env={"CUBLAS_WORKSPACE_CONFIG": "4096:8"})
 
 
 @nox.session(name="build")
