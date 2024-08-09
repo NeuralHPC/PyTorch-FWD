@@ -88,6 +88,7 @@ def finish(session):
     session.run("bumpversion", "patch", external=True)
     session.run("git", "push", external=True)
 
+
 @nox.session(name="check-package")
 def pyroma(session):
     """Run pyroma to check if the package is ok."""
