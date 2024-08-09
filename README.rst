@@ -65,7 +65,7 @@ Usage
 
 .. code:: bash
 
-    python -m fwd <path to dataset> <path to generated images>
+    python -m pytorchfwd <path to dataset> <path to generated images>
 
 Here are the other arguments and defaults used.
 
@@ -73,7 +73,7 @@ Here are the other arguments and defaults used.
 
    python -m fwd --help
    
-   usage: fwd.py [-h] [--batch-size BATCH_SIZE] [--num-processes NUM_PROCESSES] [--save-packets] [--wavelet WAVELET] [--max_level MAX_LEVEL] [--log_scale] path path
+   usage: pytorchfwd.py [-h] [--batch-size BATCH_SIZE] [--num-processes NUM_PROCESSES] [--save-packets] [--wavelet WAVELET] [--max_level MAX_LEVEL] [--log_scale] path path
    
    positional arguments:
      path                  Path to the generated images or path to .npz statistics file.
