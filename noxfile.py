@@ -78,15 +78,14 @@ def build(session):
 
 @nox.session(name="finish")
 def finish(session):
-    """Finish this version increase the version number and upload to pypi."""
-    session.install("bump2version")
-    session.install("twine")
+    """Finish this version increase the version number and upload to pypi.
+    To upload push the version tag. Git push origin tag <tag_name>.
+    """
     session.run("bumpversion", "release", external=True)
-    build(session)
-    session.run("twine", "upload", "--skip-existing", "dist/*", external=True)
-    session.run("git", "push", external=True)
+
+@nox.session(name="new-patch")
+def finish(session):
     session.run("bumpversion", "patch", external=True)
-    session.run("git", "push", external=True)
 
 
 @nox.session(name="check-package")
