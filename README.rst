@@ -119,8 +119,10 @@ these repositories.
 Testing
 =======
 The `tests` folder contains tests to conduct independent verification of FWD. Github workflow executes all these tests.
-To run tests on your local system install `nox` and run
-.. code-block::
+To run tests on your local system install `nox`, as well as this package via `pip install .`, and run
+
+.. code-block:: sh
+
    nox -s test
 
 
