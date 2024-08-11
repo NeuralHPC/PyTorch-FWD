@@ -12,12 +12,7 @@ Gall <https://pages.iai.uni-bonn.de/gall_juergen/>`__\ :sup:`1`
 | 2. *University of Tübingen, MIT-IBM Watson AI Lab*.
 |
 
-[`Archive <https://arxiv.org/pdf/2312.15289>`__] [`Project
-Page <https://lokiv.dev/frechet_wavelet_distance/>`__]
-[`Docs <https://pytorchfwd.readthedocs.io/en/latest/>`__]
-
-
-|Docs| |License| |CodeStyle| |Workflow|
+|Docs| |License| |CodeStyle| |Workflow|  |Arxiv| |Project|
 
 **Keywords:** Frechet Distance, Wavelet Packet Transform, Frechet
 Inception Distance, Diffusion, GAN, ImageNet, Image generation metrics.
@@ -132,3 +127,6 @@ To run tests on your local system install `nox`, as well as this package via `pi
 .. |Project| image:: https://img.shields.io/badge/Project-Website-red
    :target: https://lokiv.dev/frechet_wavelet_distance/
    :alt: Project Page
+.. |Arxiv| image:: https://img.shields.io/badge/arXiv-Paper-<color>
+   :target: https://arxiv.org/pdf/2312.15289
+   :alt: Arxiv Paper
